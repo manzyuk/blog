@@ -1,0 +1,110 @@
+#+DATE: [2011-10-02]
+#+TITLE: The magic of fixed points
+#+POSTID: 312
+
+A few days ago my wife received the following through [[http://vk.com][VKontakte]], the
+Russian clone of Facebook:
+
+#+begin_quote
+Find out your phone number on the calculator!
+
+1. Take the calculator.
+2. Enter the first 3 digits of your phone number.
+3. Multiply by 80.
+4. Add 1.
+5. Multiply by 250.
+6. Add the last 4 digits of your phone number.
+7. Add the last 4 digits of your phone number again.
+8. Subtract 250.
+9. Divide by 2.
+10. Enjoy!
+
+#+end_quote
+
+I was amused to see my wife getting amazed by this, arguably trivial,
+arithmetic trick.  I leave it to you as an easy exercise to figure out
+how it works.  However, this trick has reminded me of the following, a
+lot more sophisticated trick, which I learned when I was a kid.
+
+Select any 21 cards from a complete set of playing cards.  Give the
+deck of cards to your spectator, let her pick one card, and ask her to
+remember it.  Let your spectator shuffle the cards.  Now deal the
+deck, opening the cards one by one from the top, in the following
+pattern: place the first card into the first, leftmost pile; place the
+second card into the second, middle pile; place the third card into
+the third, rightmost pile; place the fourth card into the first pile
+again, and so on.  Ask your spectator to watch you deal the cards and
+to show you the pile containing her card.  Collect the cards, sticking
+that pile between the other two piles, and repeat the whole procedure
+2 more times.  Then open the cards one by one.  The card of your
+spectator is always going be the 11th card in the deck.
+
+When I was a kid, I was fascinated by this trick.  I still think it is
+pretty neat.  I was very proud then to have figured out how it works.
+Although I don't remember the proof anymore, I remember that it was
+terribly complicated, and included some lengthy case analysis.  Today
+I would like to present a simple and elegant proof.
+
+For brevity, let us call the card your spectator has chosen the
+/secret/ card.  Let $n$ be its position in the deck, counted from the
+top.  Let us compute the new position of the secret card in the deck
+after the cards have been dealt and collected back.  It is easy to
+convince yourself that relative to its pile the secret card is going
+to end up at position $\lceil n/3\rceil$ counted from the bottom of
+the pile, or equivalently at position $8-\lceil n/3\rceil$ counted
+from the top of the pile.  Here $\lceil x\rceil$ denotes the /ceiling/
+function of $x$, i.e., the smallest integer not less than $x$.
+Because the pile containing the secret card is placed between the
+other two piles, each of which consists of 7 cards, it follows that
+relative to the whole deck the secret card is going to land at
+position
+
+$$f(n) = 7 + 8 - \lceil n/3\rceil=15-\lceil n/3\rceil$$
+
+from the top of the deck.
+
+Let us summarize: if the secret card is the $n$-th card in the deck,
+counted from the top, then dealing the cards once will place the card
+at position $f(n)$ from the top in the deck.  Dealing the cards the
+second time will place the secret card at position $f(f(n))$.
+Finally, dealing the cards the third time will place the secret card
+at position $f(f(f(n)))$. We have a function $f$ from the set $\{1, 2,
+\dots, 21\}$ to itself given by the formula $f(n)=15-\lceil
+n/3\rceil$, and in order to justify the trick we must prove that for
+any $1\le n\le 21$ holds $f(f(f(n))) = 11$.
+
+What is special about 11?  It is the middle of the deck, but it is
+also a (unique) fixed point of the function $f$:
+
+$$f(11) = 15 - \lceil 11/3\rceil = 15 - 4 = 11.$$
+
+Therefore, we have to show that for any $1\le n \le 21$, the sequence
+of iterations $f(n)$, $f(f(n))$, $f(f(f(n)))$, ... converges to the
+fixed point 11, and in fact in at most 3 steps.  Let us see why this
+is the case. The key observation here is that the function $f$ is
+clearly non-increasing, i.e., $f(n_1) \le f(n_2)$ if $n_1\ge
+n_2$. Because $n$ lies between 1 and 21, it follows that
+
+$$8 = f(21)\le f(n)\le f(1) = 14.$$
+
+Iterating this argument, we find that
+
+$$10 = f(14)\le f(f(n))\le f(8) = 12,$$
+
+and consequently
+
+$$11 = f(12) \le f(f(f(n)))\le f(10) = 11,$$
+
+so that $f(f(f(n)))$ is necessarily equal to 11. Q.E.D.
+
+/Exercise./ Use this technique to generalize the trick.  For example,
+if you take 33 cards instead of 21, and deal the cards 4 times instead
+of 3, then the secret card will be the 17th card in the deck.
+
+If you are familiar with the [[http://en.wikipedia.org/wiki/Banach_fixed_point_theorem][Banach fixed point theorem]], you may be
+tempted to apply it here (I was).  Unfortunately, it doesn't work, as
+the map $f$ is not a [[http://en.wikipedia.org/wiki/Contraction_mapping][contraction mapping]]; for example,
+
+$$|f(3)-f(4)| = |14 - 13| = 1 = |3 - 4|.$$
+
+Fortunately, this kind of heavy artillery is not necessary here.

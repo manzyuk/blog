@@ -1,0 +1,480 @@
+#+DATE: [2011-09-25]
+#+TITLE: Strawberry fields
+#+POSTID: 187
+
+/TL;DR version: I present my solution in Haskell to one of the ITA's hiring puzzles, discuss the choices I've made and some surprises I discovered while writing the program./
+
+About two years ago, when I was excited about a new programming
+language I was learning then, Common Lisp, I thought it would be a
+great experience to intern at a company developing software in Common
+Lisp.  That's how I learned about [[http://www.itasoftware.com/][ITA]].  Their website has a [[http://www.itasoftware.com/careers/work-at-ita/hiring-puzzles.html][page]]
+listing their current hiring puzzles, and one of the puzzles caught my
+attention as particularly interesting.  It is called "Strawberry
+Fields".
+
+#+begin_quote
+Strawberries are growing in a rectangular field of length and width at
+most 50. You want to build greenhouses to enclose the strawberries.
+Greenhouses are rectangular, axis-aligned with the field (i.e., not
+diagonal), and may not overlap. The cost of each greenhouse is $10
+plus $1 per unit of area covered.
+
+Write a program that chooses the best number of greenhouses to build,
+and their locations, so as to enclose all the strawberries as cheaply
+as possible.  Heuristic solutions that may not always produce the
+lowest possible cost will be accepted: seek a reasonable tradeoff of
+efficiency and optimality.
+
+Your program must read a small integer 1 ≤ N ≤ 10 representing the
+maximum number of greenhouses to consider, and a matrix representation
+of the field, in which the '@' symbol represents a strawberry.  Output
+must be a copy of the original matrix with letters used to represent
+greenhouses, preceded by the covering's cost. Here is an example
+input-output pair:
+
+#+begin_example
+Input
+4
+
+..@@@@@...............
+..@@@@@@........@@@...
+.....@@@@@......@@@...
+.......@@@@@@@@@@@@...
+.........@@@@@........
+.........@@@@@........
+
+Output
+90
+
+..AAAAAAAA............
+..AAAAAAAA....CCCCC...
+..AAAAAAAA....CCCCC...
+.......BBBBBBBCCCCC...
+.......BBBBBBB........
+.......BBBBBBB........
+#+end_example
+
+In this example, the solution cost of $90 is computed as (10+8*3) +
+(10+7*3) + (10+5*3).
+
+Run your program on the 9 sample inputs found in [[http://www.itasoftware.com/careers/work-at-ita/PuzzleFiles/rectangles.txt][this file]] and report
+the total cost of the 9 solutions found by your program, as well as
+each individual solution.
+#+end_quote
+
+I must admit that I failed to solve this puzzle back then, but it
+stuck in my head.  When [[http://web.mit.edu/~axch/www/][Alexey]] mentioned that he had interned at ITA,
+I asked him if he knew about the "Strawberry Fields" puzzle.  He
+didn't, but he suggested an idea that was remarkably similar to the
+algorithm that I thought about two years ago and that I discarded
+because it was clear that for some examples it would produce covers
+that are provably not optimal.  This time I decided to implement this
+algorithm, keeping in mind that a solution to the problem isn't
+required to always produce an optimal cover.  To my surprise, the
+algorithm produced pretty good covers for the 9 sample inputs.  Also,
+in the case where it produced a solution that was obviously not
+optimal it was clear how to improve the solution by applying simple
+heuristics, which I chose not to implement, though.
+
+However, the most fun part of solving the puzzle was optimizing the
+algorithm, gradually improving the program and turning it from a very
+slow program into a reasonably performing program.  I wrote my
+solution in Haskell because I like Haskell and because I think it
+lends nicely to this problem.  On the other hand, I am not an
+experienced Haskell programmer (yet), and I am not claiming that the
+program below is a good example of functional algorithm design.  In
+fact, I am publishing my solution with the hope to attract some
+attention from more experienced Haskellers.  If you have any remarks,
+suggestions, or critique, I'd be glad to hear from you.
+
+Finally, if you are planning to apply to ITA, please do not copy my
+program.  I challenge you to come up with a better solution!
+
+* Algorithm
+
+Let us think how one could solve the problem ignoring the performance
+aspects for the time being.  So, suppose we are given a field, i.e., a
+set of strawberries (each given by a pair of integer cooridnates), and
+an integer $N$, the maximum number of greenhouses to consider.  One
+obvious way to compute an optimal cover would be the following.
+First, enumerate all partitions of the set of strawberries into a
+disjoint union of at most $N$ non-empty subsets.  Second, given such a
+partition, for each element of the partition, compute its minimum
+bounding greenhouse.  If these greenhouses are pairwise disjoint, they
+constitute an acceptable cover.  Compute its cost.  Finally, pick a
+cover with the lowest cost.
+
+What is the complexity of this solution?  The number of partitions of
+an $m$-element set into $n$ pairwise disjoint non-empty subsets is
+denoted $S(m, n)$ and is called /Stirling number of the second kind/.
+It can be computed for example as follows (see [[http://mathworld.wolfram.com/StirlingNumberoftheSecondKind.html][MathWorld Wolfram]] for
+more details):
+
+$$
+\displaystyle S(m, n) = \frac{1}{n!}\sum_{i=0}^n (-1)^i \binom{m}{i} (n-i)^m.
+$$
+
+It follows from this formula that for a fixed $n$, $S(m, n)$ grows
+exponentially with $m$.  Therefore, enumerating all partitions is not
+doable even for relatively small sizes of the field.  On the other
+hand, for many of these partitions, the corresponding minimum bounding
+greenhouses will overlap.  Can we avoid such partitions and somehow
+ensure that the cover associated with a partition is disjoint?
+
+One way to achieve this is to restrict our attention to the partitions
+that can be obtained by a sequence of horizontal and vertical cuts.
+Given a set of strawberries with the coordinates $(x_1, y_1)$, $(x_2,
+y_2)$, ..., $(x_m, y_m)$, and a split point $x$, the /horizontal cut
+at/ $x$ is defined as the pair of sets $\{(x_i, y_i) \mid x_i \le x\}$
+and $\{(x_i, y_i) \mid x_i > x\}$ (here and thereafter the $x$-axis is
+vertical and points downwards, and the $y$-axis is horizontal and is
+oriented from left to right).  The vertical cut is defined similarly.
+It is clear that for any partition obtained by successively
+subdividing the field horizontally or vertically, the associated cover
+consisting of the minimum bounding greenhouses of the partition's
+elements is disjoint.
+
+The program arranges these ideas slightly differently.  First, it is
+clearly sufficient to find for each $1 \le i \le n$ an optimal cover
+consisting of /exactly/ $i$ greenhouses.  Given a field $F$ and an
+exact number $n$ of greenhouses to consider, the algorithm splits $F$
+vertically and horizontally at all possible split points, producing
+pairs of fields $F_1$ and $F_2$.  It also generates all partitions
+$n=n_1+n_2$ of $n$ into a sum of two positive integers.  For each
+combination of the subfields $F_1$, $F_2$ and numbers $n_1$, $n_2$ the
+algorithm recursively tries to optimally cover $F_i$ by exactly $n_i$
+greenhouses.  If this is possible, the covers of $F_1$ and $F_2$ are
+combined into a cover of $F$.  All such covers of $F$ are accumulated
+into a list, and finally a cover with the lowest cost is chosen.
+Clearly, there are many ways to get from a field $F$ to its subfield
+$F'$ by a sequence of cuts.  The algorithm uses memoization to avoid
+redundant recomputation of covers of the subfields that have already
+been processed.
+
+* Implementation
+
+Here is the program.  It's been through many iterations, and the
+version presented below is the one that performs best.  On my machine
+it takes less than 43 seconds to process all 9 examples and uses less
+than 350 Mb of memory.  (The said machine has 8 cores, but this
+doesn't matter here because the program uses only one core.)  The full
+source is available [[https://gist.github.com/1239480][here]].  You can look at the output of the program
+[[https://gist.github.com/1239482][here]].
+
+#+begin_src haskell
+import Data.Array
+import Data.Char
+import Data.List
+import Data.Maybe
+import Data.Ord
+
+import Control.Applicative
+
+import System.Environment
+import System.IO.Unsafe
+
+import Data.Hashable
+import qualified Data.HashTable.IO as H
+#+end_src
+
+I am using "ugly memoization" using ~unsafePerformIO~ as described in
+Lennart Augustsson's [[http://augustss.blogspot.com/2011/04/ugly-memoization-heres-problem-that-i.html][post]].  To further improve performance I am using
+a mutable hash table from the [[http://hackage.haskell.org/package/hashtables][hashtables]] package instead of a ~Map~
+stored in an ~IORef~.  Early in the development process I tried Conal
+Eliott's [[http://hackage.haskell.org/package/MemoTrie][MemoTrie]] package, but I was dissatisfied by its performance.
+The program below modified to use MemoTrie combinators instead of
+"ugly memoization" requires almost 5 minutes to process all examples
+and uses about 2.5 Gb of memory.
+
+#+begin_src haskell
+memoIO :: (Eq a, Hashable a) => (a -> b) -> IO (a -> IO b)
+memoIO f = do
+  t <- H.new :: IO (H.CuckooHashTable a b)
+  let f' x = do v <- H.lookup t x
+                case v of
+                  Nothing -> do let r = f x
+                                H.insert t x r
+                                return r
+                  Just r  -> return r
+  return f'
+
+memo :: (Eq a, Hashable a) => (a -> b) -> (a -> b)
+memo f = let f' = unsafePerformIO (memoIO f)
+         in \x -> unsafePerformIO (f' x)
+#+end_src
+
+A strawberry is represented by a pair of integers, its coordinates.
+Initially I was using ordinary pairs (so that ~Strawberry~ was simply
+a type synonym for ~(Int, Int)~), however because lists of
+strawberries are used as keys in a hash table, I decided to experiment
+with a custom hash function.  Because both coordinates of each
+strawberry lie between 0 and 50, there can only be finitely many
+strawberry objects in the program, and it is possible to preallocate a
+pool of strawberries, giving each strawberry a unique ID, which can
+then be used as a perfect hash function.  Furthermore, instead of
+allocating a new strawberry every time I need one I can get it from
+the pool.  This helps to reduce consing and to improve memory usage.
+This aspect is not as important in the present version of the program,
+but it was important when I was trying out an optimization I am going
+to explain in more detail below (see section "Surprises").
+
+#+begin_src haskell
+data Strawberry = Strawberry { strawberryID :: !Int
+                             , strawberryX  :: !Int
+                             , strawberryY  :: !Int }
+
+instance Eq Strawberry where
+    Strawberry id1 _ _ == Strawberry id2 _ _ = id1 == id2
+
+instance Hashable Strawberry where
+    hash = strawberryID
+
+strawberries :: Array (Int, Int) Strawberry
+strawberries = array ((0, 0), (50, 50))
+               [((i, j), Strawberry (51 * i + j) i j)
+                    | i <- [0..50]
+                    , j <- [0..50]]
+
+mkStrawberry :: Int -> Int -> Strawberry
+mkStrawberry i j = strawberries ! (i, j)
+#+end_src
+
+A greenhouse is represented as a quadruple of integers, the
+coordinates of the top left and bottom right corners:
+
+#+begin_src haskell
+data Greenhouse = Greenhouse !Int !Int !Int !Int deriving Eq
+#+end_src
+
+A field is a list of strawberries, and a cover is a list of
+greenhouses.  We also store the cover's cost in the cover data
+structure to avoid its recomputation.
+
+#+begin_src haskell
+type Field = [Strawberry]
+data Cover = Cover [Greenhouse] Cost
+
+type Cost = Int
+
+cost :: Cover -> Cost
+cost (Cover _ p) = p
+{-# INLINE cost #-}
+#+end_src
+
+The function ~merge~ combines disjoint covers:
+
+#+begin_src haskell
+merge :: Cover -> Cover -> Cover
+merge (Cover gs1 p1) (Cover gs2 p2)
+    = Cover (gs1 ++ gs2) (p1 + p2)
+{-# INLINE merge #-}
+#+end_src
+
+The area of a greenhouse is the product of its dimensions:
+
+#+begin_src haskell
+type Area = Int
+
+area :: Greenhouse -> Area
+area (Greenhouse xmin ymin xmax ymax)
+    = (xmax - xmin + 1) * (ymax - ymin + 1)
+{-# INLINE area #-}
+#+end_src
+
+The function ~boundingGreenhouse~ computes the minimum bounding
+greenhouse of a field:
+
+#+begin_src haskell
+boundingGreenhouse :: Field -> Greenhouse
+boundingGreenhouse ((Strawberry _ x1 y1):ss)
+    = foldl extend (Greenhouse x1 y1 x1 y1) ss
+    where
+      extend (Greenhouse xmin ymin xmax ymax) (Strawberry _ x y)
+          = Greenhouse (min xmin x) (min ymin y)
+                       (max xmax x) (max ymax y)
+#+end_src
+
+The function ~cover'~ tries to optimally cover a field with exactly
+~n~ greenhouses.  The arguments are tupled to simplify memoization.
+The return type is ~Maybe Cover~.  If there are less strawberries than
+greenhouses, then some greenhouse is going to be empty.  We would like
+to avoid such covers (because they mean that a field can be more
+optimally covered by a smaller number of greenhouses).  That's why we
+return ~Nothing~ in this case.  If ~n~ is 1, then there is always a
+cover consisting of the minimum bounding greenhouse.  Otherwise, we
+find optimal covers obtained by splitting the field once vertically or
+horizontally, and return a cover with the lower cost.
+
+#+begin_src haskell
+cover' :: (Int, Field) -> Maybe Cover
+cover' (n, field) | n > length field = Nothing
+cover' (1, field) = Just (Cover [g] p)
+    where
+      g = boundingGreenhouse field
+      p = area g + 10
+cover' (n, field) = minimumByCost maybe_covers
+    where
+      maybe_cover1 = coverSplit strawberryX n field
+      maybe_cover2 = coverSplit strawberryY n field
+      maybe_covers = [maybe_cover1, maybe_cover2]
+#+end_src
+
+The function ~minimumByCost~ takes a list of ~Maybe Cover~ s and
+returns ~Just~ a cover with the lowest cost or ~Nothing~ if the list
+contains only ~Nothing~ s:
+
+#+begin_src haskell
+minimumByCost :: [Maybe Cover] -> Maybe Cover
+minimumByCost maybe_covers
+    | null covers
+    = Nothing
+    | otherwise
+    = Just $ minimumBy (comparing cost) covers
+    where
+      covers = catMaybes maybe_covers
+#+end_src
+
+The function ~splitField~ splits a field at a given split point along
+the axis specified by the coordinate function ~coord~:
+
+#+begin_src haskell
+splitField :: (Strawberry -> Int)
+           -> Int -> Field -> (Field, Field)
+splitField coord point = partition ((<= point) . coord)
+#+end_src
+
+The function ~coverSplit~ splits a field along the axis given by the
+coordinate function ~coord~ at all possible places, tries to cover the
+obtained subfields, and combines the covers (if any):
+
+#+begin_src haskell
+coverSplit :: (Strawberry -> Int) -> Int -> Field -> Maybe Cover
+coverSplit coord n field = minimumByCost maybe_covers
+    where
+      split_points = init . sort . nub . map coord $ field
+      maybe_covers
+          = [liftA2 merge (memoCover' (i,   field1))
+                          (memoCover' (n-i, field2))
+                 | i <- [1..n-1], point <- split_points
+                 , let (field1, field2)
+                           = splitField coord point field]
+
+memoCover' = memo cover'
+#+end_src
+
+This ~memoCover'~ is a memoized version of ~cover'~.  Finally, the
+function ~cover~ takes a field and a maximum number ~n~ of greenhouses
+to consider, tries to cover the field with exactly ~i~ greenhouses for
+each ~i~ from 1 to ~n~, and picks a cover with the lowest cost:
+
+#+begin_src haskell
+cover :: Int -> Field -> Cover
+cover n field = fromJust $ minimumByCost
+                [memoCover' (i, field) | i <- [1..n]]
+#+end_src
+
+The rest of the program does parsing of examples from the input file
+and printing the solutions to the standard output.  If you are
+interested in how these are done, take a look at the full source of
+the program [[https://gist.github.com/1239480][here]].
+
+I compile the program with ~-O2~ flag.  Adding the
+~-funbox-strict-fields~ allows to squeeze out a little more
+performance (with it the program runs about 5% faster).
+
+* Surprises
+
+While writing this program I encountered a few "surprises": changes
+that I was sure would improve performance, but that actually
+dramatically slowed the program down.
+
+One such "optimization" was based on the following observation: if one
+field is obtained from another by translation, then an optimal cover
+of the former can be obtained by translating an optimal cover of the
+latter.  This should be faster then doing the recursive crunch.
+That's why initially before calling ~memoCover'~ I was shifting the
+field towards the origin, to make it touch the axis, and then shifting
+the cover returned by ~memoCover'~ back.  Because I was manufacturing
+lots of new fields, and in particular lots of freshly allocated
+strawberries, the program was using a lot of memory (and as a
+consequence was spending a lot of time in GC, which I confirmed by
+profiling the program).  That was the reason why I switched to the
+preallocated pool of strawberries I mentioned above.  This helped to
+reduce memory usage by about 40%, and sped up the program by about 5%.
+I was happy about this improvement and didn't even think that shifting
+fields could not be such a good idea.  However, today I tried to
+remove this "optimization", and suddenly the program ran almost twice
+faster (with the "optimization" it required 72 seconds, whereas
+without the optimization it ran in only 43 seconds).  Apparently, the
+benefits of the optimization are outweighed by excessive consing
+caused by shifting fields, which in turn is stressing the GC.
+
+The second surprise was awaiting me when I tried to replace the
+composition ~init . sort . nub . map coord $ field~ with a more
+efficient algorithm for computing the list of split points:
+
+#+begin_src haskell
+splitPoints :: (Strawberry -> Int) -> Field -> [Int]
+splitPoints coord field = tail (indices checklist)
+    where
+      checklist = accumArray (||) False (0, 50)
+                  [(coord strawberry, True) | strawberry <- field]
+#+end_src
+
+This algorithm is based on the idea borrowed from Richard Bird's
+"Pearls of Functional Algorithm Design".  It computes the split points
+in linear time by setting up a bit vector, whose $i$-th entry is
+~True~ if and only if $i$ occurs as a ~coord~-coordinate of some
+strawberry (this only works because we know that each coordinate lies
+between 0 and 50).  Replacing ~init . sort . nub . map coord $ field~,
+which is quadratic in the length of the field, with a linear algorithm
+should not worsen the performance, right?  Well, I don't know exactly
+why, but at least at the provided set of examples the program with
+~splitPoints~ ran 3 times slower (126 seconds) than the other,
+obviously inefficient version.  I can only guess that GHC does pretty
+good job at fusing the loops in ~init . sort . nub . map coord $
+field~ (and worse job at optimizing arrays), and that even though
+~splitPoints~ requires linear time, the constant factor screws us
+here.
+
+*Update:* As [[http://web.mit.edu/~axch/www/][Alexey]] has pointed out, one possible reason why the
+version with ~splitPoints~ loses can be the function ~indices~, which
+traverses the entire array (51 elements) every time regardless of the
+size of the field (which is often smaller).
+
+He has also suggested another clever way to compute the list of split
+points: sort the list of coordinates /first/; then removing duplicates
+from it can be done by traversing the list once, in linear time.  I
+have implemented this strategy:
+
+#+begin_src haskell
+splitField :: (Strawberry -> Int)
+           -> Int -> Field -> (Field, Field)
+splitField coord point = partition ((< point) . coord)
+
+splitPoints :: (Strawberry -> Int) -> Field -> [Int]
+splitPoints coord = tail . nubSorted . sort . map coord
+
+nubSorted :: Eq a => [a] -> [a]
+nubSorted = foldr f []
+    where
+      f x [] = [x]
+      f x ys@(y:_) | x == y = ys
+                   | x /= y = x:ys
+
+coverSplit :: (Strawberry -> Int) -> Int -> Field -> Maybe Cover
+coverSplit coord n field = minimumByCost maybe_covers
+    where
+      split_points = splitPoints coord field
+      maybe_covers
+          = [liftA2 merge (memoCover' (i,   field1))
+                          (memoCover' (n-i, field2))
+                 | i <- [1..n-1], point <- split_points
+                 , let (field1, field2)
+                           = splitField coord point field]
+#+end_src
+
+The functions ~splitField~ and ~coverSplit~ required small tweaks.
+This version does speed up the program, even though the improvement is
+smaller than I expected (less than 2%).  Nonetheless, I think this
+version is cleaner.

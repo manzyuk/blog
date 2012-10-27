@@ -1,0 +1,392 @@
+#+DATE: [2012-10-26 Fri 23:06]
+#+TITLE: Gröbner bases in Haskell: Part II
+#+POSTID: 1165
+
+In the [[http://oleksandrmanzyuk.wordpress.com/2012/10/25/grobner-bases-in-haskell-part-i/][previous post]] we discussed the representation of variables,
+monomials, and monomial orderings in a toy EDSL for polynomial
+computations [[https://github.com/manzyuk/groebner][groebner]].  In this post, we are going to consider how
+polynomials are represented in the EDSL and implement the Gröbner
+basis algorithm.
+
+* Polynomials
+
+A term is a monomial times a coefficient (an element of some ground
+ring ~r~):
+
+#+begin_src haskell
+data Term r v o = T r (Monomial v o) deriving (Eq, Show)
+#+end_src
+
+Terms as well as monomials form a monoid:
+
+#+begin_src haskell
+instance (Num r, Ord v) => Monoid (Term r v o) where
+    mempty = T 1 mempty
+    T a m `mappend` T b n = T (a * b) (m `mappend` n)
+#+end_src
+
+Polynomials are represented as lists of non-zero terms, ordered in
+descending order by the their monomials with respect to some monomial
+order.  This makes equality test and extraction of the leading
+monomial very simple and cheap:
+
+#+begin_src haskell
+newtype Polynomial r v o = P [Term r v o] deriving Eq
+
+lm :: Polynomial r v o -> Monomial v o
+lm (P ((T _ m):_)) = m
+lm (P [])          = error "lm: zero polynomial"
+#+end_src
+
+The relative order of terms does not change if the polynomial is
+multiplied by a term:
+
+#+begin_src haskell
+(*^) :: (Num r, Ord v) => Term r v o -> Polynomial r v o -> Polynomial r v o
+u *^ P vs = P [ u `mappend` v | v <- vs ]
+#+end_src
+
+Polynomials have degree: the degree of the zero polynomial is usually
+defined to be -1, and the degree of a non-zero polynomial is the
+maximum of the degrees of its monomials:
+
+#+begin_src haskell
+instance Ord v => HasDegree (Polynomial r v o) where
+    degree (P []) = -1
+    degree (P ts) = maximum [ degree m | T _ m <- ts ]
+#+end_src
+
+We are trying to make the display of polynomials as close to the
+mathematical notation as possible.  Because we don’t know what the
+ground ring ~r~ can be, we apply some heuristics:
+
+#+begin_src haskell
+instance (Eq r, Show r, Num r, Ord v, Show v) => Show (Polynomial r v o) where
+    show (P [])     = "0"
+    show (P (t:ts)) = showHead t ++ showTail ts
+        where
+          showHead (T c m) = prefix ++ show m
+              where
+                prefix = case c of
+                           1  -> ""
+                           -1 -> "-"
+                           _  -> show c
+          showTerm (T c m) = prefix ++ show m
+              where
+                prefix = case signum c of
+                           1  -> '+':a
+                           -1 -> '-':a
+                           _  -> "(" ++ show c ++ ")"
+                a = if abs c == 1 then "" else show (abs c)
+          showTail = concatMap showTerm
+#+end_src
+
+Arithmetic operations on polynomials are defined to preserve the
+invariant of the representation of polynomials:
+
+#+begin_src haskell
+instance (Eq r, Num r, Ord v, Show v, Ord (Monomial v o))
+    => Num (Polynomial r v o) where
+    f@(P (u@(T a m):us)) + g@(P (v@(T b n):vs))
+        | m == n && a + b /= 0
+        = let P ws = P us + P vs in P $ T (a + b) m:ws
+        | m == n && a + b == 0
+        = P us + P vs
+        | m < n
+        = let P ws = f + P vs in P $ v:ws
+        | otherwise
+        = let P ws = P us + g in P $ u:ws
+    f + P [] = f
+    P [] + g = g
+
+    P (u:us) * P (v:vs)
+        = let P ws = P us * P vs + u *^ P vs + v *^ P us
+          in P $ (u `mappend` v):ws
+    _ * P [] = P []
+    P [] * _ = P []
+
+    negate (P ts) = P $ [ T (negate a) m | T a m <- ts ]
+    -- Inclusion of 'abs' and 'signum' into 'Num' was a stupid idea.
+    abs _ = error "abs is undefined for polynomials"
+    signum _ = error "signum is undefined for polynomials"
+    fromInteger = constant . fromInteger
+#+end_src
+
+Constants can be viewed as polynomials (of degree 0 unless the
+constant is 0):
+
+#+begin_src haskell
+constant :: (Eq r, Num r, Ord v) => r -> Polynomial r v o
+constant 0 = P []
+constant c = P [T c mempty]
+#+end_src
+
+Variables can be viewed as polynomials of degree 1:
+
+#+begin_src haskell
+variable :: (Num r, Eq v) => v -> Polynomial r v o
+variable x = P [T 1 (inject x)]
+#+end_src
+
+Suppose that $f$ and $g$ are two polynomials over a field $r$, and let
+$x^\alpha$ and $x^\beta$ be the leading monomials of $f$ and $g$
+respectively.  Let $x^\gamma$ be the least common multiple of
+$x^\alpha$ and $x^\beta$.  Then the /s-polynomial/ of $f$ and $g$ is
+defined to be
+
+$$\mathrm{spoly}(f, g) = x^{\gamma-\alpha}f -
+\frac{\mathrm{lc}(f)}{\mathrm{lc}(g)}x^{\gamma-\beta}g$$
+
+where $\mathrm{lc}$ denotes the leading coefficient of a
+polynomial. In Haskell:
+
+#+begin_src haskell
+spoly :: (Eq r, Fractional r, Ord v, Show v, Ord (Monomial v o))
+      => Polynomial r v o -> Polynomial r v o -> Polynomial r v o
+spoly f@(P (u@(T a m):us)) g@(P (v@(T b n):vs)) = n' *^ f - m' *^ g
+    where
+      n' = T 1       (complement m n)
+      m' = T (a / b) (complement n m)
+#+end_src
+
+* Normal Forms and Gröbner Bases
+
+A normal form of a polynomial $f$ with respect to a list $s$ of
+polynomials is essentially the remainder from multivariate division of
+$f$ by polynomials from the list $s$.  It is computed using
+Buchberger’s algorithm.  Instead of explaining the algorithm in words,
+I’ll let the code speak for itself.  The following definition is in
+fact very close to the pseudo-code that can be found, for example, in
+[[http://www.singular.uni-kl.de/Singular-book.html][A Singular Introduction to Commutative Algebra]]:
+
+#+begin_src haskell
+nf :: (Eq r, Fractional r, Ord v, Show v, Ord (Monomial v o))
+   => Polynomial r v o -> [Polynomial r v o] -> Polynomial r v o
+nf f s = go f
+    where
+      go h | h == 0      = 0
+           | []    <- s' = h
+           | (g:_) <- s' = go (spoly h g)
+           where
+             s' = [g | g <- s, lm h `isDivisibleBy` lm g]
+#+end_src
+
+The function ~groebner~ implements the Gröbner basis algorithm. It
+takes a list of generators of an ideal and returns a Gröbner basis of
+that ideal:
+
+#+begin_src haskell
+groebner :: (Eq r, Fractional r, Ord v, Show v, Ord (Monomial v o))
+         => [Polynomial r v o] -> [Polynomial r v o]
+groebner i = go i ps
+    where
+      ps = [(f, g) | f <- i, g <- i, f /= g]
+      go s [] = s
+      go s ps@((f, g):ps')
+          | h == 0    = go s ps'
+          | otherwise = go (h:s) (ps' ++ [(h, f) | f <- s])
+          where
+            h = nf (spoly f g) s
+#+end_src
+
+* Product Criterion
+
+The product criterion allows us to decrease the number of pairs that
+have to be considered by the Groebner basis algorithm.  The criterion
+says that if the least common multiple of the leading monomials of $f$
+and $g$ is their product, then the s-polynomial of $f$ and $g$ reduces
+to 0 with respect to the set $\{f, g\}$, and hence the pair $(f, g)$
+can be dropped.  We implement a function ~pc~ that tests if two
+polynomials ~f~ and ~g~ satisfy the product criterion as follows:
+
+#+begin_src haskell
+pc f g = null (variables (lm f) `intersect` variables (lm g))
+#+end_src
+
+Note that instead of computing the least common multiple of the
+leading monomials of ~f~ and ~g~ we check if the sets of variables
+occurring in each of the monomials are disjoint.
+
+The optimized version of the Gröbner basis algorithm reads as follows:
+
+#+begin_src haskell
+groebner :: (Eq r, Fractional r, Ord v, Show v, Ord (Monomial v o))
+         => [Polynomial r v o] -> [Polynomial r v o]
+groebner i = go i ps
+    where
+      ps = [(f, g) | f <- i, g <- i, f /= g, not (pc f g)]
+      go s [] = s
+      go s ps@((f, g):ps')
+          | h == 0    = go s ps'
+          | otherwise = go (h:s) (ps' ++ [(h, f) | f <- s, not (pc h f)])
+          where
+            h = nf (spoly f g) s
+#+end_src
+
+* Declaring Variables
+
+Having to define an enumeration type and to write an ~Enumerable~
+instance for it in order to declare variables is tedious.  Here we
+address this problem.
+
+First, let us define the sum of types ~a~ and ~b~:
+
+#+begin_src haskell
+data a :<: b = Inl a | Inr b deriving (Eq, Ord)
+infixr 6 :<:
+
+instance (Show a, Show b) => Show (a :<: b) where
+    show (Inl x) = show x
+    show (Inr x) = show x
+#+end_src
+
+It will become clear shortly why we have chosen to denote the sum by
+~:<:~. If both ~a~ and ~b~ are enumerable, then so is the sum of ~a~
+and ~b~:
+
+#+begin_src haskell
+instance (Enumerable a, Enumerable b) => Enumerable (a :<: b) where
+    enumerate = map Inl enumerate ++ map Inr enumerate
+#+end_src
+
+Note that the elements of ~a~ are enumerated before the elements of
+~b~.
+
+We can now define each variable as a singleton type:
+
+#+begin_src haskell
+data X = X
+data Y = Y
+data Z = Z
+#+end_src
+
+and join these types into ~X :<: Y :<: Z~. Each of the types ~X~, ~Y~,
+~Z~ is ~Enumerable~:
+
+#+begin_src haskell
+instance Enumerable X where enumerate = [X]
+instance Enumerable Y where enumerate = [Y]
+instance Enumerable Z where enumerate = [Z]
+#+end_src
+
+Hence, the type ~X :<: Y :<: Z~ is ~Enumerable~ too. It is isomorphic
+to
+
+#+begin_src haskell
+data XYZ = X | Y | Z
+#+end_src
+
+However, the elements of ~X :<: Y :<: Z~ are somewhat unwieldy to
+write: ~Inl X~, ~Inr (Inl Y)~, and ~Inr (Inr Z)~.  We solve this
+problem by the trick used in [[http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.101.4131][Data types à la carte]].  We introduce the
+following typeclass that expresses the fact that a type ~a~ is a
+subtype of a type ~b~:
+
+#+begin_src haskell
+class Sub a b where
+    inj :: a -> b
+#+end_src
+
+Instead of writing the injections using ~Inl~ and ~Inr~, the
+injections will be inferred using this typeclass. The ~Sub~ typeclass
+has only three instances:
+
+~a~ is a subtype of ~a~:
+
+#+begin_src haskell
+instance Sub a a where
+    inj = id
+#+end_src
+
+~a~ is also a subtype of the sum ~a :<: b~:
+
+#+begin_src haskell
+instance Sub a (a :<: b) where
+    inj = Inl
+#+end_src
+
+Finally, if ~a~ is a subtype of ~c~, then ~a~ is also a subtype of the
+sum ~b :<: c~:
+
+#+begin_src haskell
+instance Sub a c => Sub a (b :<: c) where
+    inj = Inr . inj
+#+end_src
+
+These instances require quite a few GHC extensions including
+~OverlappingInstances~ (in fact, we have implicitly used many GHC
+extensions above), but as with data types à la carte, this shouldn’t
+result in an unexpected behaviour, provided that user never explicitly
+nests sums.
+
+The following function allows us to view a variable from a set ~v~ as
+a polynomial over any wider set of variables ~w~:
+
+#+begin_src haskell
+var :: (Sub v w, Ord (Monomial w o), Num r, Eq w) => v -> Polynomial r w o
+var = variable . inj
+#+end_src
+
+We can now introduce
+
+#+begin_src haskell
+  x = var X
+  y = var Y
+      z = var Z
+#+end_src
+
+Thus, ~x~ is a polynomial over any ring ~r~, over any set of variables
+~w~ containing ~X~, with respect to any monomial ordering:
+
+#+begin_example
+*Main> :t x
+x :: (Eq w, Num r, Ord (Monomial w o), Sub X w) => Polynomial r w o
+#+end_example
+
+Ditto for ~y~ and ~z~.
+
+Consequently, for example, ~x * y + z~ is a polynomial over any ring
+~r~, over any set of variables ~w~ containing ~X~, ~Y~, and ~Z~, in
+particular it is a polynomial over the set of variables ~X :<: Y :<:
+Z~.
+
+Writing separate definitions for ~X~, ~Y~, ~Z~ and ~Enumerable~
+instances is still tedious. Fortunately, we can write a Template
+Haskell macro allowing us to write
+
+#+begin_src haskell
+$(defineVariables ["X", "Y", "Z"])
+#+end_src
+
+See [[https://github.com/manzyuk/groebner/blob/master/Variable.hs][Variable.hs]] for details.
+
+* Example
+
+Consider the ideal generated by polynomials $x^{10} + x^9y^2$ and
+$y^8 - x^2y^7$:
+
+#+begin_src haskell
+ideal :: Ord (Monomial (X :<: Y) o) => [Polynomial Rational (X :<: Y) o]
+ideal = [x ^ 10 + x ^ 9 * y ^ 2, y ^ 8 - x ^ 2 * y ^ 7]
+#+end_src
+
+Note that ~ideal~ is polymorphic in the monomial ordering. Let ~basis~
+be the Gröbner basis of ~ideal~:
+
+#+begin_src haskell
+basis :: Ord (Monomial (X :<: Y) o) => [Polynomial Rational (X :<: Y) o]
+basis = groebner ideal
+#+end_src
+
+We can now compute basis with respect to different monomial orderings:
+
+#+begin_example
+*Main> basis :: [Polynomial Rational (X :<: Y) Lex]
+[Y^15-Y^12,XY^12+Y^14,XY^13+Y^12,X^10+X^9Y^2,-X^2Y^7+Y^8]
+*Main> basis :: [Polynomial Rational (X :<: Y) RevLex]
+[X^16+X^13,-X^30-X^27,-X^13Y+X^15,-X^14Y-X^13,X^9Y^2+X^10,Y^8-X^2Y^7]
+*Main> basis :: [Polynomial Rational (X :<: Y) DegLex]
+[Y^14+XY^12,Y^18-X^4Y^13,XY^13+X^2Y^11,XY^17-X^11Y^6,-X^13+XY^12,X^12Y+X^3Y^10,X^9Y^2+X^10,-X^2Y^7+Y^8]
+*Main> basis :: [Polynomial Rational (X :<: Y) DegRevLex]
+[Y^14+XY^12,Y^18-X^4Y^13,XY^13+X^2Y^11,XY^17-X^11Y^6,-X^13+XY^12,X^12Y+X^3Y^10,X^9Y^2+X^10,-X^2Y^7+Y^8]
+#+end_example

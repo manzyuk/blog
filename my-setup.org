@@ -1,0 +1,189 @@
+#+DATE: [2012-08-06]
+#+TITLE: My Setup
+#+POSTID: 948
+
+On and off, I read interviews about people’s setups at [[http://usesthis.com/][usesthis.com]].
+I particularly enjoyed the interviews of [[http://andrew.huang.usesthis.com/][Andrew Huang]], [[http://benjamin.mako.hill.usesthis.com/][Benjamin Mako
+Hill]], [[http://phil.hagelberg.usesthis.com/][Phil Hagelberg]], and [[http://russ.cox.usesthis.com/][Russ Cox]].  For amusement, I’ve decided to
+reflect on my own computer usage and compile a description of my
+setup.
+
+* Who are you, and what do you do?
+
+I’ve been trained as a mathematician, but over the last a few years
+I’ve become more interested in programming, particularly functional
+and mathematically structured programming, and in theoretical computer
+science, most prominently programming languages theory and compilers.
+I’ve spent the last two years as a PhD student at [[http://www.nuim.ie/][NUIM]] thinking
+primarily about design and implementation of a novel functional
+programming language for scientific computing with support for
+automatic differentiation.  I’m beginning a new job in industry in
+September.  I’m going to work on a large commercial product written in
+Haskell, and I’m looking forward to it.
+
+* What hardware do you use?
+
+My only machine is a [[http://www.notebookcheck.net/Review-Lenovo-Thinkpad-SL500-Notebook.11741.0.html][Lenovo ThinkPad SL 500]] laptop running a 2.00 GHz
+Intel Core 2 Duo T5870, 3Gb of RAM.  It is a two years old machine,
+and its age is starting to show.  Still, at the moment of purchase, it
+was probably the best laptop with no Windows pre-installed one could
+buy in Ukraine.
+
+I have recently acquired a [[http://www.amazon.com/gp/product/B0051QVESA/ref=famstripe_k][Kindle 4]], non-touch edition, which I use
+for reading fiction.  I have many papers and books in PDF format that
+I’d also like to read away from my computer, but I haven’t found an
+affordable device suitable for that.
+
+* And what software?
+
+I run [[http://www.ubuntu.com/][Ubuntu]] 10.04 (64 bit) on my laptop.  I’ve been reluctant to
+upgrade because upgrades are know to break things and because this
+particular version has been working pretty well for me.  When I want
+the latest version of some software, I build it from source.  The
+following is a list of applications I use on a daily basis, in the
+loose order of descending importance.
+
+** Emacs
+
+When I’m working (and often also when I’m not), I’m spending most of
+my time in [[http://www.gnu.org/software/emacs/][Emacs]].  Compared to other Emacs users, the severity of my
+addiction to Emacs is modest: Emacs is my text editor, organizer, file
+manager, and shell.  I also have an [[http://marmalade-repo.org/packages/google-translate][Emacs interface to Google
+Translate]], which I use as a poor man’s dictionary.
+
+Emacs is one of few pieces of software that I build from source.
+
+** Browser
+
+The second most used application is the browser.  I’ve tried a few
+different ones: [[http://www.mozilla.org/en-US/firefox/new/][Firefox]], [[https://www.google.com/intl/en/chrome/browser/][Google Chrome]], [[http://www.opera.com/][Opera]], [[http://www.chromium.org/][Chromium]], [[http://www.conkeror.org/][Conkeror]].
+I’m not happy with any of them.  The browser I’ve enjoyed most was
+Conkeror, which is to browsers what Emacs is to editors.  However, I
+had to abandon it because occasionally it would blow up and consume
+all available RAM and half of available swap, and because it reliably
+crashes when the laptop is awaken from suspend mode.
+
+Right now I’m using Chromium, for no particular reason.  I try to keep
+the number of open tabs low, otherwise Chromium as well as Google
+Chrome become a memory drain on my machine.
+
+** xmonad
+
+My window manager is [[http://xmonad.org/][xmonad]].  A lot has been said in praise of tiling
+window managers, in particular, about how they make you more
+productive than conventional desktop environments.  I’m not sure I buy
+that.
+
+I started to use xmonad mainly out of curiosity and because of the
+hype surrounding it, and also because it is implemented in Haskell, so
+getting into it was an opportunity to learn some Haskell.  Later, when
+I was interning at [[http://streamtech.nl/][Streamtech]], a webdev startup from The Hague, I
+enjoyed the ability to easily tile the browser and a bunch of terminal
+windows on my screen.  Still later, when I was doing PhD at NUIM, I
+discovered what a joy it was to use xmonad with a dual head setup.
+
+However, right now I’m using it only on my laptop, and I’m not sure if
+it’s a such a big win there.  Unlike other xmonad users, I’m not a
+terminal junkie.  In fact, I don’t run terminals outside Emacs at all,
+except for the case when I want to ssh to a remote host.  I also
+rarely tile my windows because I don’t have enough screen real estate
+for that.  I run pretty much every application fullscreen all the
+time, with only a few exceptions.  I do like the idea of having
+dedicated workspaces for different activities, but I rarely use more
+than 3 simultaneously.
+
+Running pure xmonad on a laptop is also somewhat awkward because one
+has to think about many things DEs take care for you, for example,
+having different keyboard layouts and a layout indicator, having a
+system tray with the network manager applet and battery status,
+mounting devices etc.  That’s why I run xmonad as a drop-in
+replacement for Metacity in Gnome.  This way I get the best of both
+worlds.
+
+However, I don’t like the direction in which Gnome is heading, and
+I’ve never liked KDE, so most likely I’m stuck with xmonad, and should
+I need to reinstall my system, I’ll probably go for some combination
+of xmonad and Gnome tools.
+
+** git
+
+I use [[http://git-scm.com/][git]] as my version control system.  I almost never use the
+command line interface.  Instead, for frequent tasks like stage,
+commit, push, pull, create/change/delete a branch, and view diff/log I
+use [[http://philjackson.github.com/magit/][magit]], an awesome Emacs interface to git.  For more complex git
+surgery there is [[http://www.kernel.org/pub/software/scm/git/docs/gitk.html][gitk]].  I also use [[http://www.kernel.org/pub/software/scm/git/docs/git-gui.html][git-gui]] when I want to split a
+large commit into smaller chunks.
+
+** LaTeX
+
+I use [[http://www.tug.org/texlive/][LaTeX]] for typesetting my papers.  [[http://www.gnu.org/software/auctex/][AUCTeX]] mode for Emacs is
+superb.  I’m surprised to see people using both LaTeX and Emacs and
+not using AUCTeX, but rather invoking LaTeX, BibTeX, dvitops and other
+tools from a shell, either manually or using a makefile.  Those people
+don’t know what they are missing.
+
+** Evince
+
+I use [[http://projects.gnome.org/evince/][Evince]] to view my PDF, PostScript, and DJVU files.  Evince is
+not particularly configurable, and I hate that I have to change
+settings for every new open file, but it does its job sufficiently
+well that I don’t have an urge to switch to something better.
+
+My only gripe about Evince is that its DVI viewer doesn’t support
+[[http://xdvi.sourceforge.net/inverse-search.html][forward/inverse]] search.
+
+** xdvi
+
+That’s why I use [[http://xdvi.sourceforge.net/][xdvi]] when working with LaTeX.  xdvi is old and ugly
+as hell, but it is fast and its forward/inverse search are killer
+features for me.  Making inverse search work with Emacs used to be a
+PITA, but AUCTeX takes care of that, too.
+
+** Skype
+
+I use [[http://www.skype.com/intl/en-us/home][Skype]] for VOIP.  I like how much cleaner Skype looks on Linux
+compared to the bloated interface on Windows.  For example, I was
+unable to share screen using Skype on my wife’s Windows laptop.
+
+** Calibre
+
+As I mentioned above, I bought myself a Kindle 4 recently.  Because I
+didn’t want to deal with Amazon, I needed an application to
+conveniently upload e-books to my device and to occasionally convert
+between different formats.  [[http://calibre-ebook.com/][Calibre]] performs these tasks seamlessly.
+
+** Compilers and Interpreters
+
+I like to explore programming languages, and I have a few compilers
+and interpreters installed to support my explorations.
+
+I use [[http://www.haskell.org/ghc/][GHC]] for Haskell, which is the top pick for my language design
+experiments.  I use [[http://www.sbcl.org/][SBCL]] and [[http://common-lisp.net/project/slime/][SLIME]] for Common Lisp hacking, which I
+don’t do very often these days and only for small exploratory
+programs.  I use [[http://groups.csail.mit.edu/mac/projects/scheme/][MIT Scheme]] as my Scheme implementation only because
+that’s what my friend [[http://web.mit.edu/~axch/www/][Alexey]] uses for his language design experiments.
+
+I used to write some Ruby, but I haven’t done any Ruby hacking for
+quite a while now.  I do have some Ruby scripts lying around that I
+use occasionally (for downloading BibTeX items from MathSciNet and
+ACM).
+
+Soon I’m going to add Erlang to the list of language I use/play with.
+One (or both) of Standard ML and Caml are also interesting, primarily
+because being strict and non-pure makes programming in these language
+sufficiently different from programming in Haskell.
+
+Well, that’s it folks.  There are, of course, other pieces of
+software, but I don’t use them nearly as often as the above.  I have a
+large collection of music, which I used to listen to using [[http://projects.gnome.org/rhythmbox/][rhythmbox]].
+These days, I prefer to tune in to [[http://www.radioparadise.com/rp_2.php?#][Radio Paradise]].  I don’t do any
+photo editing except for extremely rare case when I have to resize or
+crop a picture.  I use [[http://projects.gnome.org/totem/][totem]] for watching videos, but most of the
+videos I watch are online.  I’ve learned to love Emacs [[http://www.gnu.org/software/emacs/manual/html_node/emacs/Dired.html][dired]] mode, and
+don’t start Nautilus, the default file manager in Gnome, except by
+accident.  I don’t play games.  I rarely run [[http://www.openoffice.org/][OpenOffice]], mainly when
+I’m forced to edit/view Microsoft Office files.  For quick document
+preparation, I prefer [[https://docs.google.com/][Google Docs]].
+
+Oh, there is a small Windows app that I run under [[http://www.winehq.org/][Wine]] because I
+haven’t found a good Linux alternative: [[http://www.aptuner.com/cgi-bin/aptuner/apmain.html][AP Guitar Tuner]].

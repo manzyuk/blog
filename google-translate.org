@@ -1,0 +1,168 @@
+#+DATE: [2011-09-22]
+#+TITLE: Using Google Translate from Emacs
+#+POSTID: 155
+
+*Update (Jan 6, 2012):* I have added an option to use ido-style
+completion instead of the vanilla Emacs completion mechanism.  I like
+the former a little more, as it offers a snippet of the list of
+available options and allows fuzzy (flexible) matching.  To enable it,
+set the variable ~google-translate-enable-ido-completion~ to ~t~.  In
+particular, "Detect language" appears as the first option in the
+~Translate from:~ prompt, and you can select it simply by pressing
+~RET~.
+
+*Update (Jan 3, 2012):* I have recently reimplemented the whole thing
+in Emacs Lisp, and have thus eliminated the dependence on Ruby.  The
+result is [[https://github.com/manzyuk/google-translate][google-translate]], an Emacs interface to Google Translate.
+It is more flexible than the above Ruby script.  In particular, it
+defines a function ~google-translate-query-translate~, which I bind to
+~C-c t~, which queries for the source and target languages and text to
+translate, and shows a buffer with available translations of the text.
+If you specify a default for the source (resp. target) language by
+customizing the variable ~google-translate-default-source-language~
+(resp. ~google-translate-default-target-language~), that part won't be
+queried.  However, even if any defaults are set, they can always be
+overridden by supplying a ~C-u~ prefix argument to the function
+~google-translate-query-translate~.
+
+For example, I set ~google-translate-default-source-language~ to
+~"en"~ and ~google-translate-default-target-language~ to ~"ru"~.  When
+I press ~C-c t~, my prompt looks simply as ~Translate from English to
+Russian:~, and I can quickly enter the text to translate.  If I want
+to translate something from Russian to English, I press ~C-u C-c t~.
+This time the prompt looks as ~Translate from:~.  I enter (with
+completion) ~Russian~ and press ~RET~.  The prompt changes to
+~Translate from Russian to:~.  I enter (again, with completion, and in
+fact, typing only the first two characters) ~English~ and press ~RET~.
+The prompt changes to ~Translate from Russian to English:~, at which
+point I enter the text to translate.  Pressing ~RET~ when queried for
+the source language (leaving it blank) allows me to let Google
+Translate detect the source language for me.  If you want the source
+language to always be detected by Google Translate, set the variable
+~google-translate-default-source-language~ to ~"auto"~.
+
+The code is available at [[https://github.com/manzyuk/google-translate][GitHub]], together with installation and
+customization instructions.
+
+------------------------------------------------------------------------
+
+I am not a native English speaker, and from time to time I need to
+look up a word in a dictionary.  [[http://translate.google.com][Google Translate]] makes this easy, but
+it is somewhat awkward to use because of high opportunity cost: you
+need to load the web interface first (and probably open a new tab in
+your browser before that), and regardless of how you do that (by
+clicking on a bookmark, pressing Ctrl-L to focus the location bar and
+typing translate.google.com, or googling "google translate"), it takes
+a few precious seconds before you can actually type in your word.  A
+not so long time ago the interface of Google Translate had an
+obnoxious "bug": after loading the page, the text area was not
+focused, and you had to click on it.  Argh!  Fortunately, they have
+fixed that.
+
+I am also an Emacs user, and I spend most of my time in Emacs.  Having
+to switch between Emacs and the browser to only look up a word is
+particularly annoying.  That's why I wanted to have access to Google
+Translate directly from Emacs.  Here is how I do that.
+
+I've written the following Ruby script, which I call =translate.rb=,
+and which is symlinked as =~/bin/translate=:
+
+#+begin_src ruby
+#!/usr/bin/env ruby
+
+# Usage: ruby translate.rb text
+#
+# Translate text from English to Russian using Google Translate.
+
+require 'open-uri'
+require 'json'
+
+# Retrieve contents of URL as UTF-8 encoded string.  Google Translate
+# won't allow us to make a request unless we send a "User-Agent"
+# header it recognizes, e.g. "Mozilla/4.0".
+def page(url)
+  open(url, "User-Agent" => "Mozilla/4.0") do |response|
+    response.read.encode("UTF-8")
+  end
+end
+
+def translate(text, sl="en", tl="ru")
+  baseURL     = "http://translate.google.com/translate_a/t"
+  parameters  = [["client", "t" ],
+                 ["text"  , text],
+                 ["sl"    , sl  ],
+                 ["tl"    , tl  ]]
+  requestURL  = baseURL \
+              + "?"     \
+              + parameters.map do |p|
+                  "#{p[0]}=#{URI.escape(p[1])}"
+                end.join("&")
+  # Deal with invalid (obfuscated?) JSON that Google sends us back.
+  contents    = page(requestURL).gsub(/,(?=[\],])/, ",null")
+  json        = JSON.parse(contents)
+  dictionary  = json[1]
+  if dictionary
+    dictionary.map do |item|
+      index = 0
+      item[1].map do |translation|
+        sprintf("%2d. %s", index+=1, translation)
+      end.unshift(item[0]).join("\n")
+    end.join("\n\n")
+  else
+    json[0][0][0]
+  end
+end
+
+if ARGV.size == 0
+  ARGF.each {|line| translate(line)}
+elsif ARGV.size == 1
+  puts translate(ARGV[0])
+else
+  puts "Usage: translate TEXT"
+end
+#+end_src
+
+A few words about the script.  It makes a GET request to
+http://translate.google.com/translate_a/t, passing the text to be
+translated, and the source and target languages as query parameters.
+For some reason it is also necessary to set the client parameter.
+Also, Google Translate won't accept requests unless they come from
+user agents it recognizes.  We circumvent this by passing
+"Mozilla/4.0" as the "User-Agent" header.  Google Translate sends back
+something that looks almost like a JSON, except that it is not a valid
+(but is rather deliberately obfuscated) JSON: it contains substrings
+~",,"~.  This issue is also easily fixed by replacing each comma
+followed by another comma by ~",null"~.  After that we have a valid
+JSON that can be parsed by the standard JSON parser that comes with
+Ruby.  It remains to extract and display the interesting parts from
+the parsed object.
+
+To make this script as unobtrusive to use as possible, I've written
+the following Emacs Lisp function:
+
+#+begin_src emacs-lisp
+(defun google-translate (text)
+  (interactive
+   (list
+    (read-from-minibuffer "Translate: ")))
+  (with-output-to-temp-buffer "*Google Translate*"
+    (set-buffer "*Google Translate*")
+    (insert (format "%s" text))
+    (facemenu-set-face 'bold (point-min) (point-max))
+    (insert (format "\n\n%s"
+                    (shell-command-to-string
+                     (format "translate \"%s\"" text))))))
+#+end_src
+
+I bind it to ~C-c t~.  It prompts for a word and displays its
+translation in the ~*Google Translate*~ buffer, which is put into the
+~help-mode~; in particular, pressing ~q~ dismisses it.
+
+Of course, this solution is not perfect.  For example, the script
+performs no error handling.  However, it's been serving me well enough
+over a few last months that I don't feel an urge to fix it.  Note also
+that I am using a fixed pair of languages (English and Russian);
+change it to whatever pair of languages you want to translate between.
+With a little more work one can make the script accept the source and
+target languages as command-line arguments.  I leave this as an
+exercise for the interested reader.

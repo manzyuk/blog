@@ -1,0 +1,11 @@
+#+DATE: [2012-06-10]
+#+TITLE: MFPS slides
+#+POSTID: 818
+
+Unfortunately, I couldn't attend the MFPS conference because of some
+silly visa issues. However, the organizers unanimously expressed the
+wish that my paper be presented, and [[http://andrej.com/][Andrej Bauer]] kindly agreed to
+make a presentation provided that I prepare some slides. Andrej gave a
+talk on my paper yesterday, which I hear was great, and I'd like to
+thank him for that. I thought I'd make the slides available online,
+together with the notes, so [[http://oleksandrmanzyuk.files.wordpress.com/2012/06/slides-with-notes.pdf][here]] they are.

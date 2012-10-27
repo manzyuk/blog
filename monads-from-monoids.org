@@ -1,0 +1,149 @@
+#+DATE: [2012-06-11]
+#+TITLE: Monads from monoids
+#+POSTID: 823
+
+Given a category $\mathbf{C}$ and a functor $T: \mathbf{C} \to
+\mathbf{C}$, can you merely by inspecting the definition of $T$
+conclude that $T$ admits the structure of a monad?
+
+In some cases, you can.  One way is to realize that $T$ can be
+decomposed into a composition of two adjoint functors and apply a
+well-known theorem.  Presumably, checking that the functors are
+adjoint should be less work than defining the unit and multiplication
+directly and checking that they satisfy the monad laws.
+
+For example, the state monad with state object $S$ on a cartesian
+closed category $\mathbf{C}$ is given by $TX = S\Rightarrow (X\times
+S)$.  One sees immediately that $T$ arises from the adjunction
+$-\times S \vdash S \Rightarrow -$, which expresses the fact
+$\mathbf{C}$ is closed.
+
+Another way is to realize that $T$ is the image of a monoid in a
+monoidal category $\mathbf{D}$ under a lax monoidal functor $\Phi :
+\mathbf{D} \to [\mathbf{C}, \mathbf{C}]$.  The goal of this post is to
+explain and illustrate by examples what this means.
+
+A [[http://en.wikipedia.org/wiki/Monoidal_category][monoidal category]] is a category equipped with a bifunctor $\otimes :
+\mathbf{D}\times\mathbf{D} \to \mathbf{D}$, called the /tensor
+product/, that is associative up to a natural isomorphism $\alpha:
+(X\otimes Y)\otimes Z \to X\otimes (Y\otimes Z)$, and an object $I$,
+called the /unit object/, that is both a left and right identity for
+$\otimes$, again up to natural isomorphisms $\lambda: I\otimes X\to X$
+and $\rho: X\otimes I\to X$.  The natural isomorphisms $\alpha$,
+$\lambda$, and $\rho$ are subject to two coherence conditions: a
+commutative pentagon, whose vertices correspond to the five possible
+ways to parenthesize the tensor product $W\otimes X\otimes Y\otimes
+Z$, and a commutative triangle, whose vertices are $(X\otimes
+I)\otimes Y$, $X\otimes (I\otimes Y)$, and $X\otimes Y$.
+
+For example, a cartesian category is naturally a monoidal category:
+the tensor product is the cartesian product $\times$ and the unit
+object is the terminal object $1$.
+
+Another interesting example of monoidal category is the category
+$[\mathbf{C}, \mathbf{C}]$ of endofunctors on a category $\mathbf{C}$:
+the tensor product is the composition of functors and the unit object
+is the identity functor.  The category $[\mathbf{C}, \mathbf{C}]$ is
+an example of /strict monoidal category/, i.e., one in which the
+natural associativity and identity isomorphisms are identity
+transformations.
+
+The definition of /monoid/ can be given relative to any monoidal
+category $(\mathbf{C}, \otimes, I)$.  A [[http://en.wikipedia.org/wiki/Monoid_(category_theory)][monoid]] in $\mathbf{C}$ is an
+object $M$ equipped with a morphism $\mu : M\otimes M\to M$, called
+the /multiplication/, that is associative, and a morphism $\eta: I \to
+M$, called the /unit/, that is both a left and right identity for
+$\mu$.
+
+For example, in the category of sets viewed as a monoidal category
+with respect to the cartesian product, monoids are precisely what we
+are used to call "monoids": sets equipped with a binary associative
+operation together with a distinguished element that is both a left
+and right identity.
+
+More interestingly, monoids in the category $[\mathbf{C}, \mathbf{C}]$
+are precisely monads on the category $\mathbf{C}$ !
+
+If $M$ and $N$ are monoids in $\mathbf{C}$, then a monoid morphism
+from $M$ to $N$ is a morphism $f: M\to N$ in $\mathbf{C}$ that
+preserves multiplication and unit in the obvious sense.  Monoids in
+$\mathbf{C}$ thus form a category, which we denote by
+$\mathbf{Mon}(\mathbf{C})$.
+
+A suitable notion of morphism between monoidal categories is that of
+/lax monoidal functor/. If $(\mathbf{C}, \otimes, I_{\mathbf{C}})$ and
+$(\mathbf{D}, \bullet, I_{\mathbf{D}})$ are monoidal categories, then
+a [[http://en.wikipedia.org/wiki/Lax_monoidal_functor][lax monoidal functor]] from $\mathbf{C}$ to $\mathbf{D}$ consists of a
+functor $F: \mathbf{C}\to \mathbf{D}$ together with a morphism
+$\phi^0: I_{\mathbf{D}}\to FI_{\mathbf{C}}$ and a natural
+transformation $\phi^2_{X, Y}: FX\bullet FY\to F(X\otimes Y)$ subject
+to certain coherence conditions.  A lax monoidal functor $(F, \phi^0,
+\phi^2)$ is called /strong/ or simply a monoidal functor if $\phi^0$
+and $\phi^2$ are isomorphisms.
+
+Lax monoidal functors have the following remarkable property: a lax
+monoidal functor $(F, \phi^0, \phi^2) : \mathbf{C} \to \mathbf{D}$
+gives rise to a functor $F_* : \mathbf{Mon}(\mathbf{C}) \to
+\mathbf{Mon}(\mathbf{D})$.  Namely, if $(M, \mu, \eta)$ is a monoid in
+$\mathbf{C}$, then $FM$ becomes a monoid in $\mathbf{D}$ if we define
+the multiplication by the composite $F\mu\circ \phi^2_{M, M}$ and the
+unit by the composite $F\eta \circ \phi^0$.  If $f : M\to N$ is a
+monoid morphism, then so is $Ff$, with respect to the multiplication
+and unit defined above.
+
+Therefore, if we have a lax monoidal functor $\Phi : \mathbf{D} \to
+[\mathbf{C}, \mathbf{C}]$ and a monoid $M$ in $\mathbf{D}$, we can
+conclude that $\Phi M$ is a monoid in the category $[\mathbf{C},
+\mathbf{C}]$, i.e., a monad.
+
+Enough abstract nonsense. Here are two examples illustrating this
+observation.
+
+The first is the writer monad.  Let $\mathbf{C}$ be a cartesian
+category.  There is a functor $\Phi$ from $\mathbf{C}$ to the category
+$[\mathbf{C}, \mathbf{C}]$ that maps an object $X$ to the functor
+$X\times -$.  This functor is clearly monoidal:
+
+$$(\Phi M \circ \Phi N) X = M\times (N\times X) \simeq (M\times
+N)\times X = (\Phi (M\times N)) X$$
+
+I omit the verification of the coherence conditions, which is
+straightforward.  Therefore, if $M$ is a monoid in $\mathbf{C}$, then
+$\Phi M = M\times -$ is a monad.  The underlying functor of this monad
+coincides with the underlying functor of the writer monad.  One can
+check that the monad structure obtained by translating the monoid
+structure on $M$ along the functor $\Phi$ is the usual structure of
+the writer monad.
+
+The second example is of the reader monad.  Let $\mathbf{C}$ be a
+cartesian closed category.  There is a functor $\Phi$ from the
+opposite $\mathbf{C}^\text{op}$ of the category $\mathbf{C}$ to
+$[\mathbf{C}, \mathbf{C}]$ that maps an object $X$ to the functor
+$X\Rightarrow -$.  The domain of $\Phi$ is $\mathbf{C}^\text{op}$
+because $\Phi$ is a contravariant functor.  It is obviously monoidal,
+where the monoidal structure on $\mathbf{C}^\text{op}$ is given by the
+cartesian product on $\mathbf{C}$ (more generally, the opposite of a
+monoidal category is naturally a monoidal category):
+
+$$(\Phi X \circ \Phi Y) Z = X\Rightarrow (Y\Rightarrow Z) \simeq
+(X\times Y)\Rightarrow Z=(\Phi(X\times Y))Z$$
+
+Again, I omit the verification of the coherence conditions.  If
+follows that if $E$ is a monoid in $\mathbf{C}^\text{op}$, then $\Phi
+E = E\Rightarrow -$ is a monad.  However, /every/ object $E$ of
+$\mathbf{C}^\text{op}$ is naturally a monoid!  Namely, the
+multiplication is a morphism $E\times E\to E$ in
+$\mathbf{C}^\text{op}$, i.e., a morphism $E\to E\times E$ in
+$\mathbf{C}$; we take it to be the diagonal morphism.  Similarly, the
+unit is a morphism $1 \to E$ in $\mathbf{C}^\text{op}$, i.e., a
+morphism $E\to 1$ in $\mathbf{C}$, and there is only one such
+morphism.  It is straightforward to check that these morphisms turn
+$E$ into a monoid in $\mathbf{C}^\text{op}$.  Hence $\Phi E =
+E\Rightarrow -$ is a monad.  Again, a simple computation confirms that
+its structure, obtained by translating the monoid structure of $E$
+along the functor $\Phi$, is the usual structure of the reader monad.
+
+In both of these examples, the lax monoidal functor $\Phi$ is actually
+strong.  This need not be the case in general, and in a sequel to this
+post I hope to show an example of such a lax monoidal functor and
+monads its gives rise to.

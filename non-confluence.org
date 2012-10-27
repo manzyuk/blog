@@ -1,0 +1,28 @@
+#+DATE: [2012-07-02]
+#+TITLE: Non-Confluence of the Perturbative λ-Calculus
+#+POSTID: 922
+
+Over the last month, I have been trying to prove that the reduction
+relation defined in my MFPS [[http://oleksandrmanzyuk.files.wordpress.com/2012/04/paper.pdf][paper]] "A Simply Typed Lambda-Calculus of
+Forward Automatic Differentiation" is confluent.  Alas, this is /not/
+true.  A counterexample is provided by the term $\mathsf{T}\,(\lambda
+x.\;(\lambda y.\;f x y) x)$, where $f$ is a free variable.
+There are two reduction sequences that produce two different normal
+forms:
+
+$$\begin{array}{cl}
+  & \lambda x.\;\iota_1\,((\pi_1\,((\mathsf{T}\,f) x)) (\pi_2\,x)) \\
+{} + & \lambda x.\;\iota_1\,(\pi_1\,((\mathsf{T}\,(f (\pi_2\,x))) x)) \\
+{} + & \lambda x.\;\iota_2 ((f (\pi_2\,x)) (\pi_2\,x)), \\
+\neq  & \lambda x.\;\iota_1\,((\pi_1\,((\mathsf{T}\,f) x)) (\pi_2\,x)) \\
+{} + & \lambda x.\;\iota_1\,(\pi_1\,((\mathsf{T}\,(f (\pi_2\,x))) (\iota_2\,(\pi_2\,x)))) \\
+{} + & \lambda x.\;\iota_1\,(\pi_1\,((\mathsf{T}\,(f (\pi_2\,x))) x)) \\
+{} + & \lambda x.\;\iota_1\,((\pi_1\,((\mathsf{T}\,f) (\iota_2\,(\pi_2\,x)))) (\pi_2\,x)) \\
+{} + & \lambda x.\;\iota_2\,((f (\pi_2\,x)) (\pi_2\,x)).
+\end{array}$$
+
+The latter contains terms of the form $\pi_1\,((\mathsf{T}\,M)
+(\iota_2\,N))$, which are semantically zero but don't reduce.  The
+reduction sequences have been discovered with the help of [[http://redex.racket-lang.org/][Redex]], which
+proved to be an extremely valuable tool.  An encoding of the
+perturbative λ-calculus in Redex is available [[https://gist.github.com/3029753][here]].

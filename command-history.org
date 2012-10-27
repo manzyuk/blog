@@ -1,0 +1,104 @@
+#+DATE: [2011-10-24]
+#+TITLE: A persistent command history in Emacs
+#+POSTID: 390
+
+If you run interactive interpreters (e.g., ~python~, ~irb~, ~ghci~
+etc.) inside Emacs, you have probably observed that they lose command
+history between sessions.  This is very annoying, and below I offer a
+way to fix it.
+
+Emacs interpreter modes are derived from ~comint~ mode.  The command
+history is called an /input ring/ and is stored in the buffer-local
+variable ~comint-input-ring~.  Furthermore, ~comint~ offers some
+facilities for reading/writing the input ring from/to a history file.
+In particular, the name of the history file is given by the variable
+~comint-input-ring-file-name~, and the functions that read/write the
+input ring are ~comint-read-input-ring~ and ~comint-write-input-ring~.
+The variable ~comint-input-ring-file-name~ is buffer-local, and can be
+~nil~, in which case the above functions are no-ops.  We would like
+Emacs to behave as follows: whenever we run an interpreter, its input
+ring is read from a file associated with that interpreter and is
+written to that file when we quit the interpreter.  The former is easy
+to achieve: this is what mode hooks are for.  We can associate with
+each interpreter a file in which its history will be stored, for
+example ~inferior-haskell-history~ for ~ghci~ and
+~inferior-ruby-history~ for ~irb~, and in the corresponding mode hook
+we can set the variable ~comint-input-ring-file-name~ to the
+appropriate value and call ~comint-read-input-ring~.  The latter is
+slightly more involved.  We want to write the input ring to the file
+when the interpreter process exits.  This is achieved by changing the
+process /sentinel/.  From the documentation:
+
+#+begin_quote
+A process sentinel is a function that is called whenever the
+associated process changes status for any reason, including signals
+(whether sent by Emacs or caused by the process's own actions) that
+terminate, stop, or continue the process. The process sentinel is also
+called if the process exits. The sentinel receives two arguments: the
+process for which the event occurred, and a string describing the type
+of event.
+#+end_quote
+
+So, the idea is to change (again, in the mode hook) the process
+sentinel to the function that will not only insert the event
+description into the process buffer, but will also write the input
+ring to the history file.  Here is an implementation:
+
+#+begin_src emacs-lisp
+(defun comint-write-history-on-exit (process event)
+  (comint-write-input-ring)
+  (let ((buf (process-buffer process)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (insert (format "\nProcess %s %s" process event))))))
+
+(defun turn-on-comint-history ()
+  (let ((process (get-buffer-process (current-buffer))))
+    (when process
+      (setq comint-input-ring-file-name
+            (format "~/.emacs.d/inferior-%s-history"
+                    (process-name process)))
+      (comint-read-input-ring)
+      (set-process-sentinel process
+                            #'comint-write-history-on-exit))))
+#+end_src
+
+Now, to enable reading/writing of command history in, say,
+~inferior-haskell-mode~ buffers, simply add ~turn-on-comint-history~
+to ~inferior-haskell-mode-hook~:
+
+#+begin_src emacs-lisp
+(add-hook 'inferior-haskell-mode-hook 'turn-on-comint-history)
+#+end_src
+
+Unfortunately, the above solution doesn't always work.  For example,
+the input ring is not written to the file if the buffer associated
+with the process is killed, because the process sentinel is invoked
+when buffer-local variables (in particular,
+~comint-input-ring-file-name~ and ~comint-input-ring~) are gone.
+Therefore we also add ~comint-write-input-ring~ to ~kill-buffer-hook~;
+this has no effect if the buffer is not associated with a process or
+doesn't have ~comint-input-ring-file-name~ set:
+
+#+begin_src emacs-lisp
+(add-hook 'kill-buffer-hook 'comint-write-input-ring)
+#+end_src
+
+However, even this is not enough.  Apparently, when Emacs itself is
+killed, ~kill-buffer-hook~ is not run on individual buffers.  We can
+circumvent this problem by adding a hook to ~kill-emacs-hook~ that
+traverses the list of all buffers and writes the input ring (if it is
+available) of each buffer to a file.
+
+#+begin_src emacs-lisp
+(defun mapc-buffers (fn)
+  (mapc (lambda (buffer)
+          (with-current-buffer buffer
+            (funcall fn)))
+        (buffer-list)))
+
+(defun comint-write-input-ring-all-buffers ()
+  (mapc-buffers 'comint-write-input-ring))
+
+(add-hook 'kill-emacs-hook 'comint-write-input-ring-all-buffers)
+#+end_src

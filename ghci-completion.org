@@ -1,0 +1,42 @@
+#+DATE: [2012-02-05]
+#+TITLE: Completion for GHCi commands in Emacs
+#+POSTID: 677
+
+I complained [[http://www.haskell.org/haskellwiki/Haskell_mode_for_Emacs][here]] that ~inferior-haskell-mode~ in Emacs is missing
+~TAB~ completion for GHCi commands (like ~:load~, ~:module~, ~:set~
+etc.).  This is a general problem with Emacs modes derived from the
+~comint~ mode: they don't pass ~TAB~ key events to the inferior
+process, which would trigger the completion mechanism, and assume
+instead that completion is handled by Emacs itself.  In some cases,
+like, for example, with the Ruby interpreter ~irb~, there is a
+reflection mechanism, which allows one to programmatically query the
+interpreter for completions of a given command line, given the state
+of the interpreter (loaded modules, bindings etc.), instead of relying
+on some magic built-in mechanism.  In other cases, like with GHCi, the
+interactive interpreter shipped with the Glasgow Haskell Compiler,
+there are no such reflection mechanisms (although people are trying to
+rectify this).
+
+Defining your own completion functions can be very tedious.
+Fortunately, Emacs 24, which is about to officially be released this
+spring, comes with a framework, known as ~pcomplete~ (for
+"programmable completion"), whose purpose is to simplify the task of
+defining completion functions.  In fact, ~pcomplete~ has been included
+into vanilla Emacs for quite a while already.  However, it is only in
+Emacs 24 that ~pcomplete~ has become the preferred way to define
+completion functions.  It is used to provide completion for many
+commands (e.g., ~ssh~, ~scp~, ~tar~, and many others) in ~shell~ and
+~eshell~.  Furthermore, it allows one to relatively easily add
+completion for new commands.  For example, [[http://www.masteringemacs.org/articles/2012/01/16/pcomplete-context-sensitive-completion-emacs/][this post]] shows how to add
+rudimentary completion for ~git~ commands in ~shell~ and ~eshell~.
+Drawing inspiration from it, I set to add some basic completion for
+GHCi commands.  The result is a small package [[https://github.com/manzyuk/ghci-completion][ghci-completion]].  I've
+been using it for one week now, and it is /very/ useful.  It is
+probably not as powerful as the built-in completion in GHCi, but it
+covers most of my use cases of completion.  It is so nice to be able,
+for example, to type ~:set -X~, hit ~TAB~, and see the list of the
+language extensions, or to type ~:m~ and be able to complete on the
+names of the exposed modules in the registered packages.  I invite you
+to give ~ghci-completion~ a try.  There is a caveat: it works only
+with Emacs 24, which is yet another reason not to wait until the
+spring and to switch now!

@@ -1,0 +1,285 @@
+#+DATE: [2012-10-26 Fri 22:48]
+#+TITLE: Gröbner bases in Haskell: Part I
+#+POSTID: 1058
+
+* Introduction
+
+Although I am primarily a category theorist (my PhD research was at
+the border between category theory and homological algebra), I also
+studied algebraic geometry and computer algebra for my master degree
+at the University of Kaiserslautern.  Computer algebra is a diverse
+subject encompassing many fields of symbolic computations.  Our
+lectures in Kaiserslautern focused on computations in polynomial rings
+with an eye towards applications to algebraic geometry.
+
+Functional programming languages are a particularly good fit for
+symbolic computations.  My goal in this blog post is to illustrate
+this by showing you an implementation in Haskell of [[http://en.wikipedia.org/wiki/Buchberger%27s_algorithm][Buchberger’s
+algorithm]] for computing Gröbner bases of polynomial ideals.
+
+Haskell is also a great host language for embedded domain-specific
+languages.  To illustrate this, we are going to implement Buchberger’s
+algorithm as part of a tiny EDSL for polynomial computations.
+
+Before we dive in, I would like to make a couple of remarks about the
+desiderata that guided the implementation.
+
+First, my goal was to design a toy EDSL, not a fully-fledged computer
+algebra system, with the syntax that is as close to the mathematical
+notation as possible, possibly at the cost of efficiency.  Don’t
+expect this implementation to be competitive with the advanced
+computer algebra systems like [[http://www.singular.uni-kl.de/][Singular]], [[http://www.math.columbia.edu/~bayer/Macaulay/][Macaulay]], [[http://www.maplesoft.com/][Maple]] etc.
+
+Second, the whole point of using Haskell, and not say Common Lisp, as
+the host language is to leverage Haskell’s highly expressive type
+system.  For example, in the computer algebra system [[http://www.singular.uni-kl.de/][Singular]],
+developed in Kaiserslautern, polynomial rings are described by three
+pieces of information: the ground field, list of variables, and
+monomial ordering.  In my EDSL this information is encoded in types,
+so that polynomials over different fields, or in different sets of
+variables, or of different monomial orderings are values of different
+types and can’t be accidentally mixed in programs.  This particular
+desideratum has influenced many design choices we are about to
+discuss.
+
+Today we are going to look at how variables, monomials, and monomial
+orderings are represented, leaving the representation of polynomials
+and actual implementation of the Gröbner basis algorithm for the next
+post.  The complete code of the EDSL is available at [[https://github.com/manzyuk/groebner][GitHub]].
+
+* Variables
+
+Somewhat unconventionally, I have chosen to represent variables by
+enumeration types.  For example, the set of three variables ~X~, ~Y~,
+~Z~ is represented by the following data type:
+
+#+begin_src haskell
+data XYZ = X | Y | Z deriving (Eq, Ord, Show)
+#+end_src
+
+Every constructor is nullary and simply names a variable.  If you want
+to compute with polynomials in $n$ variables, you first need to define
+an enumeration type with n constructors, e.g., if $n = 5$:
+
+#+begin_src haskell
+data Vars = X1 | X2 | X3 | X4 | X5 deriving (Eq, Ord, Show)
+#+end_src
+
+Defining enumeration types by hand is arguably tedious and ugly
+(having to invent names for enumeration types is particularly
+obnoxious).  We shall see later how we can make declaring variables
+more pleasant using some Template Haskell.
+
+* Monomials
+
+A monomial over a finite set of variables represented by an
+enumeration type ~v~ is represented internally by a ~Map~ from
+variables to integers (exponents):
+
+#+begin_src haskell
+newtype Monomial v o = M (Map v Int) deriving Eq
+#+end_src
+
+The type Monomial is a [[http://www.haskell.org/haskellwiki/Phantom_type][phantom type]]: the type variable ~o~ does not
+appear on the right hand side of the definition of ~Monomial~.  We are
+going to use ~o~ later as a tag allowing us to define different
+instances of the ~Ord~ typeclass (i.e., different monomial orderings)
+on ~Monomial~.
+
+We have a number of helper functions to construct monomials.  A
+variable can be viewed as a monomial:
+
+#+begin_src haskell
+inject :: Eq v => v -> Monomial v o
+inject x = M $ Map.singleton x 1
+#+end_src
+
+We can convert a monomial to a list of variable-exponent pairs, and we
+can build a monomial from such a list:
+
+#+begin_src haskell
+toList :: Ord v => Monomial v o -> [(v, Int)]
+toList (M m) = [ p | p@(x, n) <- Map.toList m, n /= 0 ]
+
+fromList :: Ord v => [(v, Int)] -> Monomial v o
+fromList xs = M $ Map.fromList [ p | p@(x, n) <- xs, n /= 0 ]
+#+end_src
+
+Note that the variables with zero exponents are dropped.  We can look
+up the exponent of a given variable in a monomial:
+
+#+begin_src haskell
+exponent :: Ord v => v -> Monomial v o -> Int
+exponent x (M m) = fromMaybe 0 (Map.lookup x m)
+#+end_src
+
+We can also collect the variables occurring in a monomial with
+non-zero exponents:
+
+#+begin_src haskell
+variables :: Ord v => Monomial v o -> [v]
+variables = map fst . toList
+#+end_src
+
+Monomials are shown as power products of variables:
+
+#+begin_src haskell
+instance (Ord v, Show v) => Show (Monomial v o) where
+    show m
+        | null support
+        = "1"
+        | otherwise
+        = concat [ show x ++ suffix
+                 | (x, n) <- support
+                 , let suffix = if n == 1
+                                then ""
+                                else "^" ++ show n
+                 ]
+        where
+          support = toList m
+#+end_src
+
+Monomials over a set of variables ~v~ are naturally a monoid:
+
+#+begin_src haskell
+instance Ord v => Monoid (Monomial v o) where
+    mempty = M Map.empty
+    M a `mappend` M b = M $ Map.unionWith (+) a b
+#+end_src
+
+Monomials have degree.  Because polynomials also have degree, it is
+convenient to have an overloaded function ~degree~:
+
+#+begin_src haskell
+class HasDegree a where
+  degree :: a -> Int
+#+end_src
+
+The degree of a monomial is the sum of the exponents of its variables:
+
+#+begin_src haskell
+instance Ord v => HasDegree (Monomial v o) where
+    degree (M m) = Map.fold (+) 0 m
+#+end_src
+
+We can test whether one monomial is divisible by another:
+
+#+begin_src haskell
+isDivisibleBy :: Ord v => Monomial v o -> Monomial v o -> Bool
+isDivisibleBy (M a) (M b) = Map.isSubmapOfBy (<=) b a
+#+end_src
+
+We can divide one monomial by another:
+
+#+begin_src haskell
+div :: Ord v => Monomial v o -> Monomial v o -> Monomial v o
+div (M a) (M b) = M $ Map.differenceWith sub a b
+    where
+      sub x y | x > y     = Just (x - y)
+              | otherwise = Nothing
+#+end_src
+
+We are going to use the function div only when one monomial is known
+to be divisible by the other, but the above definition gives a
+plausible answer also when this is not the case.
+
+The least common multiple of monomials is defined as follows:
+
+#+begin_src haskell
+lcm :: Ord v => Monomial v o -> Monomial v o -> Monomial v o
+lcm (M a) (M b) = M $ Map.unionWith max a b
+#+end_src
+
+Finally, ~complement m n~ computes the product of factors in ~n~ that
+are missing in ~m~:
+
+#+begin_src haskell
+complement :: Ord v => Monomial v o -> Monomial v o -> Monomial v o
+complement m n = lcm m n `div` m
+#+end_src
+
+* Monomial Orderings
+
+A /monomial ordering/ on the set of monomials is a total ordering that
+is compatible with multiplication of monomials, i.e., $m_1 \le m_2$
+implies $m_1n \le m_2n$.
+
+We equip monomials ~Monomial v o~ over the set of variables ~v~ with
+different orderings by supplying different tags ~o~:
+
+#+begin_src haskell
+instance (Show v, Enumerable v) => Ord (Monomial v Lex) where
+    (<=) = lex
+instance (Show v, Enumerable v) => Ord (Monomial v RevLex) where
+    (<=) = revlex
+instance (Show v, Enumerable v) => Ord (Monomial v DegLex) where
+    (<=) = deglex
+instance (Show v, Enumerable v) => Ord (Monomial v DegRevLex) where
+    (<=) = degrevlex
+#+end_src
+
+Here ~Lex~, ~RevLex~, ~DegLex~, and ~DegRevLex~ are empty data types:
+
+#+begin_src haskell
+data Lex         -- Lexicographic ordering
+data RevLex      -- Reverse lexicographic ordering
+data DegLex      -- Degree lexicographic ordering
+data DegRevLex   -- Reverse degree lexicographic ordering
+#+end_src
+
+that are used as tags so that we can define different ~Ord~ instances
+on the ~Monomial~ type.  Instead of making ~Monomial~ a phantom type,
+we could also define ~newtype~ wrappers around ~Map v Int~, but then
+the definition of polynomials would have to become more involved.
+
+The definitions of orderings are written in a slightly unintuitive
+style because they define ~(<=)~, not ~(>)~ or ~(<)~ as is customary.
+This is necessary because a minimal instance declaration of ~Ord~
+requires either ~compare~ or ~(<=)~.  In particular, if we define only
+~(>)~, then the default implementation of ~(<=)~ isn't in terms of
+~(>)~ but in terms of ~compare~, which in turn by default is defined
+in terms of ~(<=)~, leading to an infinite loop.
+
+#+begin_src haskell
+lex' :: (Ord v, Show v) => Monomial v o -> Monomial v o -> [v] -> Bool
+lex' a b []     = True
+lex' a b (x:xs) = exponent x a <= exponent x b
+                  && (exponent x a /= exponent x b || lex' a b xs)
+
+lex, revlex, deglex, degrevlex :: (Enumerable v, Show v)
+                               => Monomial v o -> Monomial v o -> Bool
+lex       a b = lex' a b enumerate
+revlex    a b = lex' a b (reverse enumerate)
+deglex    a b = degree a <= degree b
+                && (degree a /= degree b || a `lex` b)
+degrevlex a b = degree a <= degree b
+                && (degree a /= degree b || b `revlex` a)
+#+end_src
+
+The definitions of orderings rely on the order of variables and the
+knowledge which variables can occur in monomials.  We encode this
+information in the typeclass ~Enumerable~:
+
+#+begin_src haskell
+class Ord a => Enumerable a where
+    enumerate :: [a]
+#+end_src
+
+We have added the ~Ord~ constraint to the context in order to save
+some typing (and because it makes sense).  For each type ~v~ of
+variables, we have to define an instance of ~Enumerable~.  For
+example:
+
+#+begin_src haskell
+data XYZ = X | Y | Z deriving (Eq, Ord, Show)
+
+instance Enumerable XYZ where enumerate = [X, Y, Z]
+#+end_src
+
+* Summary
+
+That's it for this time.  Thanks for reading this far! In this blog
+post we have discussed how variables, monomials, and monomial
+orderings are represented in our EDSL.  In the next post we shall
+consider how polynomials are represented in the EDSL and implement the
+Gröbner basis algorithm.

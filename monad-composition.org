@@ -1,0 +1,271 @@
+#+DATE: [2011-09-12]
+#+TITLE: On monad composition
+#+POSTID: 105
+#+OPTIONS: f:nil
+
+/This blog post is an HTML translation of a note I wrote for myself some time ago.  I am publishing it here with the hope that somebody may find it useful./
+
+King and Wadler claimed in [3] that the list monad can be composed
+with any monad.  As observed in [2] and more recently in [4], the
+definitions given in [3] are not correct: e.g., they do not work if
+one tries to compose the list monad with itself.  We show how these
+definitions can be falsified using QuickCheck.
+
+The notion of distributive law was introduced by Beck [1] in order to
+classify monad compositions.  Roughly speaking, if $K$ and $H$ are
+monad on a category $\mathcal{C}$, then a distributivity law of $K$
+over $H$ is a natural transformation $\lambda : HK\to KH$ subject to
+some axioms.  Given such a distributivity law, the composition (of
+functors) $KH$ can be equipped with the structure of a monad.
+Composing (or, more generally, combining) monads plays an important
+role in programming languages theory, because it allows us to combine
+various types of computations.  For example, the list monad $L$ can be
+used to model a form of nondeterminism, where instead of returning one
+value, a list of values is returned, and the empty list indicates
+failure.  Therefore, composing the list monad with another monad $M$
+amounts in practice to adding nondeterminism to the class of
+computations modeled by $M$.  In [3], King and Wadler claimed that the
+list monad can be composed with any monad. Unfortunately, the
+definitions given in [3] are not correct, as observed, e.g., by Jones
+and Duponcheel [2] and more recently by Manes and Mulry [4].  We show
+how this error could have been spotted by translating these
+definitions into Haskell and QuickCheck'ing them.  This blog post is a
+literate Haskell program.
+
+First, we need a few imports:
+
+#+begin_src literate-haskell
+> import Control.Monad
+> import Test.QuickCheck
+#+end_src
+
+Given any monad ~m~ and type ~a~, King and Wadler observe that ~m [a]~
+becomes a monoid with respect to the following operation:
+
+#+begin_src literate-haskell
+> (<>) :: Monad m => m [a] -> m [a] -> m [a]
+> a <> b = do  x <- a
+>              y <- b
+>              return (x ++ y)
+#+end_src
+
+Equivalently, ~(<>) = liftM2 (++)~.  The identity element for
+~(<>)~ is
+
+#+begin_src literate-haskell
+> e :: Monad m => m [a]
+> e = return []
+#+end_src
+
+We can also multiply any list of elements of type ~m [a]~:
+
+#+begin_src literate-haskell
+> prod :: Monad m => [m [a]] -> m [a]
+> prod = foldl (<>) e
+#+end_src
+
+King and Wadler then define a function
+
+#+begin_src literate-haskell
+> joinML :: Monad m => m [m [a]] -> m [a]
+> joinML = join . liftM prod
+#+end_src
+
+and claim that together with
+
+#+begin_src literate-haskell
+> unitML :: Monad m => a -> m [a]
+> unitML = return . return
+#+end_src
+
+and
+
+#+begin_src literate-haskell
+> mapML :: Monad m => (a -> b) -> m [a] -> m [b]
+> mapML = liftM . map
+#+end_src
+
+it makes the composition of ~m~ and ~[]~ into a monad.  However, we
+can easily check that the associativity does not hold for ~joinML~ if
+~m~ is specialized to ~[]~.  Namely, if we define a QuickCheck
+property
+
+#+begin_src literate-haskell
+> associativity :: [[[[[[Int]]]]]] -> Bool
+> associativity t
+>     = (joinML . joinML $ t) == (joinML . mapML joinML $ t)
+#+end_src
+
+then testing it with QuickCheck yields
+
+#+begin_example
+*Main> quickCheck associativity
+*** Failed! Falsifiable (after 5 tests and 14 shrinks):
+[[[[[[],[]]]],[[[[0]]],[]]]]
+#+end_example
+
+In fact, King and Wadler make even a stronger claim, namely that any
+monad ~m~ admits a distributivity law over the list monad and it is
+given by
+
+#+begin_src literate-haskell
+> cp :: Monad m => [m a] -> m [a]
+> cp = prod . map (liftM return)
+#+end_src
+
+However, it is easy to check that one of the distributive law axioms
+fails, namely the one called (cp-4) in [3] and (/DL B/) in [4].
+Again, it is easily QuickCheck'ed:
+
+#+begin_src literate-haskell
+> cp4 :: [[[Int]]] -> Bool
+> cp4 xsss
+>     = (cp . map concat $ xsss) == (concat . map cp . cp $ xsss)
+#+end_src
+
+#+begin_example
+*Main> quickCheck cp4
+*** Failed! Falsifiable (after 5 tests and 10 shrinks):
+[[[0,0]],[[1],[2]]]
+#+end_example
+
+It is shown in [4] that a distributivity law of ~m~ over the list
+monad exists provided that ~m~ is a commutative monad (e.g., ~m~ is a
+reader monad, or the writer monad associated with a commutative
+monoid).  Let us describe this distributivity law.  The list monad is
+a linear quotient of the monad of binary trees:
+
+#+begin_src literate-haskell
+> data Tree a  =  Empty
+>              |  Leaf a
+>              |  Branch (Tree a) (Tree a)
+
+> tau                 ::  Tree a -> [a]
+> tau Empty           =   []
+> tau (Leaf x)        =   [x]
+> tau (Branch t1 t2)  =   (tau t1) ++ (tau t2)
+#+end_src
+
+The distributivity law ~lambda :: Monad m => [m a] -> m [a]~ of ~m~
+over the list monad is then uniquely determined by the equation ~psi
+== lambda . tau~ (see [4], p. 204), where ~psi~ is defined as follows:
+
+#+begin_src literate-haskell
+> psi                :: Monad m => Tree (m a) -> m [a]
+> psi Empty          =  e
+> psi (Leaf x)       =  liftM return x
+> psi (Branch t1 t2) =  (psi t1) <> (psi t2)
+#+end_src
+
+It is easy to check that the function ~cp~ satisfies the equation ~psi
+== cp . tau~.  Indeed, we need to show that ~psi t == cp . tau $ t~
+for any tree ~t :: Tree (m a)~. The proof is by induction on the
+structure of ~t~. If ~t == Empty~, we obtain:
+
+#+begin_example
+   cp . flatten $ Empty
+== {- definition of tau -}
+   cp []
+== {- definition of map -}
+   prod []
+== {- definition of foldl -}
+   e
+== {- definition of psi -}
+   psi Empty
+#+end_example
+
+If ~t == Leaf x~, then
+
+#+begin_example
+   cp . flatten $ Leaf x
+== {- definition of tau -}
+   cp [x]
+== {- property of map -}
+   prod [liftM return x]
+== {- property of foldl -}
+   liftM return x
+== {- definition of psi -}
+   psi (Leaf x)
+#+end_example
+
+Finally, if ~t == Branch t1 t2~, then
+
+#+begin_example
+   cp . flatten $ Branch t1 t2
+== {- definition of tau -}
+   cp $ (tau t1) ++ (tau t2)
+== {- definition of cp -}
+   prod . map (liftM return) $ (tau t1) ++ (tau t2)
+== {- map is a homomorphism of monoids-}
+   prod $ (map (liftM return) (tau t1))
+          ++ (map (liftM return) (tau t2))
+== {- (<>) is associative and
+      foldl is a homomorphism of monoids -}
+   (prod . map (liftM return) $ tau t1)
+   <> (prod . map (liftM return) $ tau t2)
+== {- induction hypothesis -}
+   (psi t1) <> (psi t2)
+== {- definition of psi -}
+   psi (Branch t1 t2)
+#+end_example
+
+Therefore, the distributivity law whose existence is proven in [4]
+coincides with ~cp~.  Where does the commutativity of the monad ~m~
+show up?  The proof of the distributivity law axioms for ~cp~ relies
+on the following property of ~prod~ (stated as (prod-4) in [3]):
+
+#+begin_example
+prod . map (join . liftM prod) == join . lift prod . prod
+#+end_example
+
+which does not hold in general (and can be falsified using QuickCheck
+likewise ~cp~).  The left hand side of the equation applied to a list
+~[a1, a2, ..., an] :: [m [m [a]]]~ can be seen to be equal to
+
+#+begin_example
+prod . map (join . liftM prod) $ [a1, a2, ..., an]
+    == do  x1 <- a1
+           z1 <- prod x1
+           x2 <- a2
+           z2 <- prod x2
+           ...
+           xn <- an
+           zn <- prod xn
+           return (z1 ++ z2 ++ ... ++ zn)
+#+end_example
+
+whereas the right hand side applied to ~[a1, a2, ..., an]~ can be
+identified with
+
+#+begin_example
+join . liftM prod . prod $ [a1, a2, ..., an]
+    == do  x1 <- a1
+           x2 <- a2
+           ...
+           xn <- an
+           z1 <- prod x1
+           z2 <- prod x2
+           ...
+           zn <- prod xn
+           return (z1 ++ z2 ++ ... ++ zn)
+#+end_example
+
+If ~m~ is commutative, then the order of the statements in the ~do~
+block does not matter, and the obtained expressions are equal.
+
+The existence of a distributivity law for a general ~m~ is a subtle
+question.  In fact, it is an open problem whether the list monad
+admits a distributivity law over itself.  It is worth pointing out
+that the monad of /nonempty/ lists does admit a distributive law over
+itself (see [4], Example 5.1.10).
+
+
+** References
+
+[1] Jon Beck, /Distributive laws/, In /Sem. on Triples and Categorical Homology Theory (ETH, Zürich, 1966/67)/, pp. 119-140. Springer, Berlin, 1969.
+
+[2] Mark P. Jones, Luc Duponcheel, Composing monads, 1993; available [[http://web.cecs.pdx.edu/~mpj/pubs/RR-1004.pdf][here]].
+
+[3] David King and Philip Wadler, /Combining Monads/, Mathematical Structures in Computer Science, 1992, pp. 61-78.
+
+[4] Ernie Manes and Philip Mulry, /Monad Composition I: General Constructions and Recursive Distributive Laws/, Theory and Applications of Categories, Vol. 18, No. 7, 2007, pp. 172-208.

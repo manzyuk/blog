@@ -1,0 +1,12 @@
+#+DATE: [2012-02-13]
+#+TITLE: Calculating monad transformers with category theory
+#+POSTID: 716
+
+I have noticed recently that the the standard monad transformers --
+state, reader, writer, error -- can be interpreted as instances of one
+general categorical construction: translation of a monad along an
+adjunction.  I have taken time to write down what exactly I mean by
+this.  The result is [[http://oleksandrmanzyuk.files.wordpress.com/2012/02/calc-mts-with-cat-th1.pdf][this note]].  I consider it an elaboration of Derek
+Elkins' "Calculating monads with category theory" ([[http://www.haskell.org/wikiupload/8/85/TMR-Issue13.pdf][The Monad.Reader
+Issue 13]]), hence the title.  If you like the note (and even if you
+don't), I'd be glad to hear from you.

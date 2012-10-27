@@ -1,0 +1,185 @@
+#+DATE: [2011-09-05]
+#+TITLE: A quiz
+#+POSTID: 6
+
+[[http://web.mit.edu/%7Eaxch/www/][Alexey]] and I have recently discussed the following quiz:
+
+#+begin_quote
+You are given an array of length $n>0$ of pairwise independent random
+real numbers uniformly distributed on $[0,1]$. Suppose you are
+searching for the maximal element in the array by traversing it from
+left to right and updating a temporary variable holding the maximal
+value found so far (the variable is initialized with the 0th element
+of the array before the loop).  How many updates will you be making on
+average?
+#+end_quote
+
+Frankly, my own intuition for these kinds of things is pretty weak,
+which is why I felt challenged and sat down to solve the quiz. Below
+is what I ended up with. This is how /not/ to solve it.
+
+First, let us formalize the problem. Let $T(n)$ be the answer for an
+array of length $n$. Let us figure out what exactly the "on average"
+part means here. Let $u(x)$ denote the number of updates required by
+an array $x$ of length $n$.  If the set $X$ of all possible arrays
+were finite, say $X=\{x_1, x_2, \dots, x_N\}$, we would count the
+number of updates for each array, and then $T(n)$ would be the average
+of these numbers:
+
+$$\displaystyle T(n) = \frac{1}{N}\sum_{p=1}^N u(x_p).$$
+
+Because $u(x)$ can have as its values only integers between $0$ and
+$n-1$, we can rearrange the terms in the above formula and write it as
+follows:
+
+$$
+\displaystyle T(n) = \sum_{i=1}^{n-1}i \cdot \frac{\#\{x\in X \mid
+u(x) = i\}}{\# X}.
+$$
+
+Here $\# S$ denotes the cardinality of a set $S$. The quotient
+
+$$\displaystyle \frac{\#\{x\in X \mid u(x) = i\}}{\# X}$$
+
+can be interpreted as the probability that an array picked at random
+from the set $X$ requires $i$ updates, provided all arrays in $X$ are
+equally likely.  In other words, $T(n)$ becomes the expectation of
+$u$.  Unfortunately, the set $X$ is infinite; in fact, it can be
+identified with the $n$-dimensional cube $[0, 1]^n$.  And yet the
+logic remains the same.  Because each coordinate is uniformly
+distributed over the interval $[0, 1]$, the distribution of arrays in
+$X$ is also uniform.  That is, the probability that an array picked at
+random from the set $X$ is contained in a subset $A\subset X$ is the
+$n$-dimensional volume $\mathrm{vol}_n(A)$ of $A$.  In the fancy
+language of probability theory, the $n$-dimensional volume
+$\mathrm{vol}_n$ is the product of $n$ copies of the Lebesgue measure
+on $[0,1]$ corresponding to the uniform distribution of each of the
+$n$ coordinates.  The measure $\mathrm{vol}_n$ is a probability
+measure on the set $X$, i.e., $\mathrm{vol}_n(X)=1$, and hence the
+pair $(X,\mathrm{vol}_n)$ is a probability space.  Furthermore, $u$ is
+a function $X\to\mathbb{N}$, i.e., a discrete random variable, and
+$T(n)$ is the expectation of $u$:
+
+$$\displaystyle T(n) = \sum_{i=1}^{n-1}i\cdot\mathrm{vol}_n(u^{-1}(i)).$$
+
+Let us describe the set $u^{-1}(i)=\{x\in X \mid u(x)=i\}$.  An array
+$x$ requires $i$ updates if and only if there exists a sequence of
+indexes $1 \le k_1 < k_2 < \dots < k_i \le n-1$ where the updates
+happen such that $x(0) < x(k_1) < x(k_2) < \dots < x(k_i)$ and for
+each $0 \le j \le i$ and index $k_j < k < k_{j+1}$ holds $x(k_j) \ge
+x(k)$; here we put $k_0=0$ and $k_{i+1}=n$ for uniformity. If the
+indexes $k_1 < k_2 < \dots < k_i$ are fixed, the volume of the set of
+arrays $x$ satisfying these inequalities is given by the integral
+
+$$\displaystyle\int_0^1\int_0^{t_i}\dots\int_0^{t_1}t_0^{k_1-1}t_1^{k_2-k_1-1}
+\dots t_{i-1}^{k_i-k_{i-1}-1}t_i^{n-k_i-1}dt_0dt_1\dots dt_i,$$
+
+which is fairly easy to compute and which is equal to
+
+$$\displaystyle\frac{1}{k_1\cdot k_2\cdot\ldots\cdot k_i\cdot n}.$$
+
+The volume of the preimage $u^{-1}(i)$ is equal to the sum of these
+integrals over all possible sequences of indexes:
+
+$$\displaystyle\mathrm{vol}_n(u^{-1}(i))=\frac{1}{n}\sum_{1\le k_1 <
+k_2 < \dots < k_i \le n-1}\frac{1}{k_1\cdot k_2\cdot\ldots\cdot
+k_i}.$$
+
+The average number of updates is then given by the formula
+
+$$T(n) = \displaystyle \frac{1}{n}\sum_{i=1}^{n-1}\sum_{1\le k_1 < k_2
+< \dots < k_i \le n-1}\frac{i}{k_1\cdot k_2\cdot\ldots\cdot k_i}.$$
+
+Clearly, this cannot possibly be an answer to a job interview quiz.  It
+is too complicated.  I wasn't pleased with my solution, so I emailed
+the quiz to Alexey to see if he could come up with anything
+better.  And indeed, his solution turned out to be very slick: The
+probability that the largest item in the array is the last is $1/n$.
+Whether it is or no, the $[0..n-1]$ prefix is isomorphic to the
+original problem.  Thus we have to do $T(n-1)$ work, and with
+probability $1/n$ we have one more update after that:
+
+$$T(n) = 1/n + T(n-1).$$
+
+An array of length $1$ doesn't require updates, so that $T(1) = 0$.
+Together these equations imply that $T(n) = 1/2 + 1/3 + \dots + 1/n$,
+the $n$-th harmonic number less $1$.  In particular, this immediately
+suggests that the number of updates grows logarithmically in $n$,
+which is very hard to see from my formula.
+
+By the way, is my answer actually correct? At first, I didn't think
+so. How can something as hairy as
+
+$$\displaystyle\frac{1}{n}\sum_{i=1}^{n-1}\sum_{1 \le k_1 < k_2 <
+... < k_i \le n-1}\frac{i}{k_1\cdot k_2\cdot\ldots\cdot k_i}$$
+
+possibly be equal to $1/2 + 1/3 + ... + 1/n?$ I tried to prove that by
+induction and didn't succeed. However, this is indeed the case, and I
+have discovered an elegant algebraic proof, which I am  pleased to
+present.
+
+First, observe that the sum
+
+$$\displaystyle \sum_{1 \le k_1 < k_2 < ... < k_i \le
+n-1}\frac{1}{k_1\cdot k_2\cdot\ldots\cdot k_i}$$
+
+occurring in $T(n)$ is the $i$-th elementary symmetric polynomial in
+$1$, $1/2$, ..., $1/(n-1)$. Consider the polynomial
+
+$$
+\displaystyle
+\begin{array}{rcl}P(u)
+& = & \displaystyle
+\Bigl(u + 1\Bigr)\Bigl(\frac{u}{2}+ 1\Bigr)\dots\Bigl(\frac{u}{n-1} +
+1\Bigr)
+\\
+\\
+& = & \displaystyle u^{n-1}\cdot\frac{1}{1\cdot
+2\cdot\ldots\cdot(n-1)}\\ \\ & + & \displaystyle\dots
+\\
+\\
+& + & \displaystyle u^2\cdot\Bigl(\frac{1}{1\cdot 2} +
+\frac{1}{1\cdot 3} + \dots + \frac{1}{(n-1)(n-2)}\Bigr)
+\\
+\\
+& + & \displaystyle u\cdot\Bigl(1 + \frac{1}{2} + \dots +
+\frac{1}{n-1}\Bigr)
+\\
+\\
+& + & 1.
+\end{array}
+$$
+
+The coefficients of $P$ are precisely the elementary symmetric
+polynomials in $1, 1/2, \dots, 1/(n-1)$.  The value of $P$ at the
+point $1$ is the sum of these polynomials, which is almost $T(n)$,
+except that in $T(n)$ these polynomials show up with coefficients $1,
+2, \dots, n-1$.  That's pretty easy to fix.  The trick is to consider
+the derivative of $P$.  On the one hand, it equals
+
+$$
+\displaystyle
+\begin{array}{rcl}
+P'(u) & = & \displaystyle
+u^{n-2}\cdot (n-1)\cdot\frac{1}{1\cdot 2\cdot \ldots\cdot (n-1)}
+\\
+\\
+& + & \displaystyle\dots
+\\
+\\
+& + & \displaystyle u \cdot 2\cdot\Bigl(\frac{1}{1\cdot 2} +
+\frac{1}{1\cdot 3} + \dots + \frac{1}{(n-1)(n-2)}\Bigr)
+\\
+\\
+& + & \displaystyle\Bigl(1 + \frac{1}{2} + \dots + \frac{1}{n-1}\Bigr)
+\end{array}
+$$
+
+and therefore $T(n) = P'(1)/n$.  On the other hand, using the product
+rule, we obtain
+
+$$\displaystyle P'(u) = P(u)\Bigl(\frac{1}{u+1}+\frac{1}{u+2} +
+\dots + \frac{1}{u+n-1}\Bigr).$$
+
+Furthermore, $P(1) = 2 \cdot 3/2 \cdot 4/3 \cdot\ldots\cdot n/(n-1) =
+n$, and hence $T(n) = P'(1)/n = 1/2 + 1/3 + \dots + 1/n$.  Q. E. D.

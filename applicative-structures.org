@@ -1,0 +1,298 @@
+#+DATE: [2011-12-11]
+#+TITLE: On the applicative structures of monads
+#+POSTID: 501
+
+In the paper [[http://www.cs.ox.ac.uk/ralf.hinze/Lifting.pdf]["Lifting Operators and Laws"]], Ralf Hinze identified an
+interesting class of applicative functors, so called strongly
+extensional applicative functors with K-combinators, that have a
+remarkable property: they satisfy every lifted base-level identity.
+An applicative functor ~m~ is called /extensional/ if it satisfies the
+following property for each pair of values ~mf, mg :: m (a -> b)~: if
+for each ~mx :: m a~ holds ~mf <*> mx == mg <*> mx~, then ~mf == mg~.
+In other words, the function
+
+#+begin_example
+(<*>) :: m (a -> b) -> (m a -> m b)
+#+end_example
+
+is injective.  If furthermore the function
+
+#+begin_example
+(. pure) . (<*>) :: m (a -> b) -> (a -> m b)
+#+end_example
+
+is injective, then ~m~ is called /strongly extensional/.  Clearly, a
+strongly extensional applicative functor is also extensional.  For
+example, the environment monad, ~Maybe~, and the list monad are
+strongly extensional.  The reader is referred to the paper for the
+definition of what it means for an applicative functor to have
+K-combinators.
+
+At the very end of the paper Ralf Hinze asked the following question:
+Is every extensional applicative functor also strongly extensional?
+When I saw this question, I thought immediately: "This must be true
+for monads."  I argued as follows: Suppose ~m~ is a monad that is also
+an extensional applicative functor.  Let us show that it is also
+strongly extensional.  Let ~mf, mg :: m (a -> b)~ and suppose that
+
+#+begin_example
+(mf <*>) . pure == (mg <*>) . pure.
+#+end_example
+
+The functions ~(mf <*>)~ and ~(mg <*>)~ have type ~m a -> m b~, where
+the types ~m a~ and ~m b~ are free ~m~-algebras. It is natural to ask:
+Are these functions compatible with the ~m~-algebra structure?  In
+other words, are the functions ~(mf <*>)~ and ~(mg <*>)~ ~m~-algebra
+morphisms? I trusted my intuition, which suggested that was indeed the
+case.  Applying the following well known fact from category theory I
+concluded that ~(mf <*>) == (mg <*>)~, and hence ~mf == mg~ by
+extensionality.
+
+*Lemma.* Let ~a~ be a type and let ~g :: m b -> b~ be an ~m~-algebra.
+There is a one-to-one correspondence between ~m~-algebra morphisms
+~h :: m a -> b~ from the free ~m~-algebra ~join :: m (m a) -> m a~ to
+~g :: m b -> b~ and functions ~a -> b~.  The correspondence is defined
+as follows: an ~m~-algebra morphism ~h :: m a -> b~ is mapped to the
+composite ~h . return~; conversely, a function ~k :: a -> b~ is
+extended to an ~m~-algebra morphism ~h = g . liftM k~.
+
+However, a more careful analysis given below shows, somewhat
+unexpectedly, that whether my guess that ~(mf <*>)~ and ~(mg <*>)~ are
+~m~-algebra morphisms is correct depends on which of the two
+applicative structures of ~m~ we consider.
+
+The point is, any ~Monad~ can be made ~Applicative~ in /two/ different
+ways: by taking ~pure = return~ and ~(<*>) = ap~, where
+
+#+begin_src haskell
+ap :: Monad m => m (a -> b) -> m a -> m b
+ap mf mx = do  f  <-  mf
+               x  <-  mx
+               return (f x)
+#+end_src
+
+or by taking ~(<*>)~ to be the variant of ~ap~, which we denote by
+~pa~, that performs the computations ~mf~ and ~mx~ in the opposite
+order:
+
+#+begin_src haskell
+pa :: Monad m => m (a -> b) -> m a -> m b
+pa mf mx = do  x  <-  mx
+               f  <-  mf
+               return (f x)
+#+end_src
+
+There are no obvious reasons to prefer ~ap~ over ~pa~, except that it
+appears more natural to perform the computations in the order they are
+supplied, which is probably why the applicative structure given by
+~pa~ is overlooked.
+
+*Proposition.* The function ~pa mf :: m a -> m b~ is an ~m~-algebra
+morphism, for each ~mf :: m(a -> b)~.  If ~m~ is a commutative monad,
+then also ~ap mf :: m a -> m b~ is an ~m~-algebra morphism.
+
+Before giving the proof of the proposition, which is straightforward,
+let me briefly recall the relevant notions.
+
+An ~m~-algebra is a type ~a~ together with a function ~f :: m a -> a~,
+called the /action/, such that
+
+#+begin_example
+f . return == id  and  f . lift f == f . join.
+#+end_example
+
+Given two ~m~-algebras ~f :: m a -> a~ and ~g :: m b -> b~, an
+~m~-algebra morphism is a function ~h :: a -> b~ such that
+
+#+begin_example
+h . f == g . liftM h.
+#+end_example
+
+For any type ~a~, the type ~m a~ is an ~m~-algebra whose action is
+given by ~join :: m (m a) -> m a~.  ~m~-algebras of this form are
+called /free/.  A function ~g :: m a -> m b~ is an ~m~-algebra
+morphism if
+
+#+begin_example
+join . liftM g == g . join,
+#+end_example
+
+or equivalently, if for any ~mmx :: m (m a)~ holds
+
+#+begin_example
+join (liftM g mmx) == g (join mmx)
+#+end_example
+
+For completeness, we also recall the definitions of ~join~ and
+~liftM~:
+
+#+begin_src haskell
+join :: Monad m => m (m a) -> m a
+join mmx = mmx >>= id
+
+liftM :: Monad m => (a -> b) -> m a -> m b
+liftM f mx = mx >>= \x -> return (f x)
+#+end_src
+
+/Proof of Proposition./ Let us show that for each ~mf :: m (a -> b)~,
+the function ~pa mf :: m a -> m b~ is an ~m~-algebra morphism.  As
+explained above, we need to show that for each ~mmx :: m (m x)~, the
+equation
+
+#+begin_example
+join (liftM (pa mf) mmx) == pa mf (join mmx)
+#+end_example
+
+holds true.  Let us transform the left hand side:
+
+#+begin_example
+    join (liftM (pa mf) mmx)
+
+==  {- definition of join -}
+
+    (liftM (pa mf) mmx) >>= id
+
+==  {- definition of liftM -}
+
+    (mmx >>= \mx -> return (pa mf mx)) >>= id
+
+==  {- "associativity" monad law -}
+
+    mmx >>= \mx -> return (pa mf mx) >>= id
+
+==  {- "left identity" monad law -}
+
+    mmx >>= \mx -> pa mf mx
+
+==  {- definition of pa -}
+
+    mmx >>= \mx -> mx >>= \x -> mf >>= \f -> return (f x)
+#+end_example
+
+The right hand side can be written as follows:
+
+#+begin_example
+    pa mf (join mmx)
+
+==  {- definition of join -}
+
+    pa mf (mmx >>= id)
+
+==  {- definition of pa -}
+
+    (mmx >>= id) >>= \x -> mf >>= \f -> return (f x)
+
+==  {- "associativity" monad law -}
+
+    mmx >>= \mx -> id mx >>= \x -> mf >>= \f -> return (f x)
+
+==  {- definition of id -}
+
+    mmx >>= \mx -> mx >>= \x -> mf >>= \f -> return (f x)
+#+end_example
+
+The obtained expressions are identical, hence the assertion.
+
+Suppose that ~m~ is a commutative monad.  Let us show that the
+function ~ap mf :: m a -> m b~ is also an ~m~-algebra morphism.
+Again, we have to prove that for each ~mmx :: m (m a)~, the equation
+
+#+begin_example
+join (liftM (ap mf) mmx) == ap mf (join mmx)
+#+end_example
+
+holds true.  On the one hand, we have:
+
+#+begin_example
+    join (liftM (ap mf) mmx)
+
+==  {- definitions of join -}
+
+    (liftM (ap mf) mmx) >>= id
+
+==  {- definition of liftM -}
+
+    (mmx >>= \mx -> return (ap mf mx)) >>= id
+
+==  {- "associativity" monad law -}
+
+    mmx >>= \mx -> return (ap mf mx) >>= id
+
+==  {- "left identity" monad law -}
+
+    mmx >>= \mx -> ap mf mx
+
+==  {- definition of ap -}
+
+    mmx >>= \mx -> mf >>= \f -> mx >>= \x -> return (f x)
+
+==  {- syntactic sugar -}
+
+    do  mx  <-  mmx
+        f   <-  mf
+        x   <-  mx
+        return (f x)
+#+end_example
+
+On the other hand:
+
+#+begin_example
+    ap mf (join mmx)
+
+==  {- definition of join -}
+
+    ap mf (mmx >>= id)
+
+==  {- definition of ap -}
+
+    mf >>= \f -> (mmx >>= id) >>= \x -> return (f x)
+
+==  {- "associativity" monad law -}
+
+    mf >>= \f -> mmx >>= \mx -> id mx >>= \x -> return (f x)
+
+==  {- definition of id -}
+
+    mf >>= \f -> mmx >>= \mx -> mx >>= \x -> return (f x)
+
+==  {- syntactic sugar -}
+
+    do  f   <-  mf
+        mx  <-  mmx
+        x   <-  mx
+        return (f x)
+#+end_example
+
+These expressions are equal because ~m~ is commutative, hence the
+assertion. Q.E.D.
+
+We can now partly answer Ralf Hinze's question "Is any extensional
+monad also strongly extensional?"
+
+*Proposition.* Let ~m~ be a monad, and suppose its applicative
+structure is given by ~pure = return~ and ~(<*>) = pa~.  If ~m~ is
+extensional, then it is also strongly extensional.
+
+/Proof./ Suppose ~m~ is extensional.  Let us show it is also strongly
+extensional.  Let ~mf, mg :: m (a -> b)~ and suppose that
+
+#+begin_example
+pa mf (return x) == pa mg (return x)
+#+end_example
+
+for each ~x :: a~.  Because ~pa mf~ and ~pa mg~ are ~m~-algebra
+morphisms, it follows by the lemma that ~pa mf == pa mg~, which by the
+extensionality implies ~mf == mg~. Q.E.D.
+
+I find this apparent asymmetry in the properties of ~ap~ and ~pa~
+bizarre. On the one hand, the answer to Ralf Hinze's question seems to
+depend on which applicative structure we equip the monad with.  Most
+likely, the answer is affirmative in both cases, but I haven't found a
+proof yet. On the other hand, there is probably no asymmetry here, as
+the function ~ap~ produces ~m~-algebra morphisms when partially
+applied to the second argument, while ~pa~ partially applied to the
+second argument is an ~m~-algebra morphism if and only if ~m~ is
+commutative.
+
+Are there any real world examples in which the applicative structure
+of monads given by ~pa~ has advantages over that given by ~ap~?
