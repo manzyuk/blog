@@ -1,3 +1,4 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
 #+DATE: [2011-09-05]
 #+TITLE: A quiz
 #+POSTID: 6

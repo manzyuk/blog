@@ -1,3 +1,4 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
 #+DATE: [2011-12-11]
 #+TITLE: On the applicative structures of monads
 #+POSTID: 501

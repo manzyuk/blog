@@ -1,3 +1,4 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
 #+DATE: [2011-11-06]
 #+TITLE: Better Emacs shell: Part I
 #+POSTID: 421

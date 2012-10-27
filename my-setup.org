@@ -1,3 +1,4 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
 #+DATE: [2012-08-06]
 #+TITLE: My Setup
 #+POSTID: 948
