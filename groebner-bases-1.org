@@ -81,7 +81,7 @@ variables to integers (exponents):
 newtype Monomial v o = M (Map v Int) deriving Eq
 #+end_src
 
-The type Monomial is a [[http://www.haskell.org/haskellwiki/Phantom_type][phantom type]]: the type variable ~o~ does not
+The type ~Monomial~ is a [[http://www.haskell.org/haskellwiki/Phantom_type][phantom type]]: the type variable ~o~ does not
 appear on the right hand side of the definition of ~Monomial~.  We are
 going to use ~o~ later as a tag allowing us to define different
 instances of the ~Ord~ typeclass (i.e., different monomial orderings)
