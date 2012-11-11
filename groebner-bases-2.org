@@ -331,9 +331,9 @@ var = variable . inj
 We can now introduce
 
 #+begin_src haskell
-  x = var X
-  y = var Y
-      z = var Z
+x = var X
+y = var Y
+z = var Z
 #+end_src
 
 Thus, ~x~ is a polynomial over any ring ~r~, over any set of variables
