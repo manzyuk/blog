@@ -1,5 +1,5 @@
 # -*- eval: (org2blog/wp-mode 1) -*-
-#+DATE: [2012-10-26 Fri 23:06]
+#+DATE: [2012-10-26]
 #+TITLE: Gröbner bases in Haskell: Part II
 #+POSTID: 1165
 
