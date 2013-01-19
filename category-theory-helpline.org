@@ -134,7 +134,7 @@ here.
 We first observe that =Free f a= is isomorphic to the fixed point of
 the functor =Either a :. f=, and =Cofree f a= is isomorphic to the
 fixed point of the functor =(,) a :. f=, where =:.= denotes functor
-composition:
+composition (thanks to [[http://ro-che.info/][Roman Cheplyaka]] for suggesting this notation):
 
 #+begin_src literate-haskell
 > newtype (f :. g) a = C { unC :: f (g a) }
@@ -354,3 +354,7 @@ On the other hand, not every Haskell functor =f= admits a dual natural
 transformation =Functor f => f (Either a b) -> Either a (f b)=.
 =Traversable= functors do, but the former condition is weaker, I
 think.
+
+*Update*: User sclv on reddit [[http://www.reddit.com/r/haskell/comments/145iu5/why_free2fix_needs_traversable_and_fix2cofree/c7a3aj8][suggested]] that (up to the order of
+summands) the function =f (Either a b) -> Either a (f b)= is called
+/costrength/ in Edward Kmett's [[http://comonad.com/reader/2008/deriving-strength-from-laziness/][post]].
