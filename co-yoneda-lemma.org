@@ -1,0 +1,99 @@
+#+POSTID: 1359
+# -*- eval: (org2blog/wp-mode 1) -*-
+#+DATE: [2013-01-19]
+#+TITLE: Co-Yoneda Lemma
+
+The purpose of this humble blog post is to understand [[http://stackoverflow.com/questions/14263363/is-operational-really-isomorphic-to-a-free-monad#comment19859454_14263363][this]] insightful
+comment by Edward Kmett to the question [[http://stackoverflow.com/questions/14263363/is-operational-really-isomorphic-to-a-free-monad]["Is operational really
+isomorphic to a free monad?"]] posted at StackOverflow.
+
+Consider the following data type definition in Haskell, which can also
+be found in Edward Kmett's package [[http://hackage.haskell.org/package/kan-extensions][kan-extensions]]:
+
+#+begin_src haskell
+data CoYoneda f a = forall b. CoYoneda (b -> a) (f b)
+#+end_src
+
+In Haskell, a =forall= before the data constructor means existential
+rather than universal quantification, so that =CoYoneda f a= is
+isomorphic to the type $\exists b. (b\to a, f\, b)$.  The =forall=
+hints at the polymorphic type of the constructor
+
+#+begin_example
+CoYoneda :: forall b. (b -> a) -> f b -> CoYoneda f a
+#+end_example
+
+Every polymorphic function satisfies a theorem that can be extracted
+by reading its type as a relation.  This is referred to as
+parametricity.  The reader is referred to Wadler's classic paper
+[[http://ttic.uchicago.edu/~dreyer/course/papers/wadler.pdf]["Theorems for free!"]] for more details.
+
+Suppose that =f= is a functor.  Then parametricity implies the
+following free theorem for the function =CoYoneda=: if =g :: b -> a=
+and =y :: f c=, then ~CoYoneda (g . h) y == CoYoneda g (fmap h y)~ for
+any =h :: c -> b=.
+
+Consider the following two functions:
+
+#+begin_src haskell
+  phi :: f a -> CoYoneda f a
+  phi x = CoYoneda id x
+
+  psi :: Functor f => CoYoneda f a -> f a
+  psi (CoYoneda g y) = fmap g y
+#+end_src
+
+Then obviously ~psi . phi == id~:
+
+#+begin_example
+(psi . phi) x == fmap id x == x
+#+end_example
+
+The above free theorem implies also that ~phi . psi == id~:
+
+#+begin_example
+(phi . psi) (CoYoneda g y) == CoYoneda id (fmap g y) == CoYoneda g y
+#+end_example
+
+We conclude that =CoYoneda f= is isomorphic =f=.  This is a Haskell
+version of the [[http://ncatlab.org/nlab/show/co-Yoneda+lemma][co-Yoneda Lemma]].
+
+** Appendix
+
+The only thing that is missing in Wadler's paper is how to associate a
+relation with the type =f b=.  Wadler only explains this in the case
+of the list functor.  We assume that the Haskell functor =f= is
+modeled by a functor $F$ on the category of sets.  Suppose that
+$\mathcal{B}: B \Leftrightarrow B'$ is a relation associated with the
+type =b=.  That is, $\mathcal{B}$ is a subset of $B\times B'$.  Let
+$\iota: \mathcal{B}\hookrightarrow B\times B'$ denote the inclusion
+map.  We define the relation associated with the type =f b= as the
+image of the composite $\langle F\pi, F\pi'\rangle\circ F\iota:
+F(\mathcal{B})\to FB\times FB'$, where $\pi: B\times B'\to B$ and
+$\pi': B\times B'\to B'$ are the canonical projections.
+
+For example, if ~f = []~, so that $F=(-)^*$ is the list functor, then
+the above definition says that two lists $xs \in B^*$ and $ys \in
+B'^*$ are related if there exists a list $zs\in \mathcal{B}^* \subset
+(B\times B')^*$ such that
+
+$$
+\begin{array}{rcl}
+map\; fst\; zs & \equiv & xs,\\
+map\; snd\; zs & \equiv & ys.
+\end{array}
+$$
+
+In other words, $xs$ and $ys$ are related if they have the same length
+and corresponding elements are related, which coincides with Wadler's
+definition.
+
+It follows from this definition that if $\mathcal{B}$ is the relation
+associated with a function $g: B\to B'$, then $F(\mathcal{B})$ is the
+relation associated with the function $Fg$.  Indeed, if $\mathcal{B}$
+is the graph of $g$, i.e., the image of the map $\langle\mathrm{id}_B,
+g\rangle: B\to B\times B'$, then $F(\mathcal{B})$ is the image of the
+composite $\langle F\pi, F\pi'\rangle\circ F(\langle\mathrm{id}_B,
+g\rangle)$, which coincides with $\langle F\mathrm{id}_B, Fg\rangle =
+\langle \mathrm{id}_{FB}, Fg\rangle$.  Therefore, $F(\mathcal{B})$
+coincides with the graph of $Fg$.
