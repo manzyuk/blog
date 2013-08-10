@@ -43,11 +43,11 @@ escape sequences in the comint output.
 (setq non-sgr-control-sequence-regexp
       (regexp-alternatives
        '(;; icon name escape sequences
-         "33\\][0-2];.*?07"
+         "\033\\][0-2];.*?\007"
          ;; non-SGR CSI escape sequences
-         "33\\[\\??[0-9;]*[^0-9;m]"
+         "\033\\[\\??[0-9;]*[^0-9;m]"
          ;; noop
-         "1233\\[2K33\\[1F"
+         "\012\033\\[2K\033\\[1F"
          )))
 
 (defun filter-non-sgr-control-sequences-in-region (begin end)
