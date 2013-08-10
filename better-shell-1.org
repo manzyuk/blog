@@ -31,6 +31,12 @@ The following piece of Emacs Lisp enables filtering out of non-SGR
 escape sequences in the comint output.
 
 #+begin_src emacs-lisp
+(defun preamble-regexp-alternatives (regexps)
+  "Return the alternation of a list of regexps."
+  (mapconcat (lambda (regexp)
+               (concat "\\(?:" regexp "\\)"))
+             regexps "\\|"))
+
 (defvar non-sgr-control-sequence-regexp nil
   "Regexp that matches non-SGR control sequences.")
 
