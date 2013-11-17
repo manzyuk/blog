@@ -28,7 +28,9 @@ give [[https://github.com/feuerbach/ariadne][Ariadne]] and [[https://github.com/
 straightforward:
 
 1. Install [[https://github.com/feuerbach/ariadne][Ariadne]] and run the ~ariadne-server~ executable.
-2. Install [[https://github.com/manzyuk/bert-el][bert-el]] and [[https://github.com/manzyuk/ariadne-el][ariadne-el]], e.g. from [[http://marmalade-repo.org/][Marmalade]].
+2. Install [[https://github.com/manzyuk/bert-el][bert-el]] and [[https://github.com/manzyuk/ariadne-el][ariadne-el]] by cloning the Git repositories and
+   adding their paths to ~load-path~. If you use [[http://marmalade-repo.org/][Marmalade]], you can
+   also obtain both packages by running ~M-x package-install ariadne~.
 3. Add the following lines to your ~.emacs~ file:
 
 #+BEGIN_SRC emacs-lisp
