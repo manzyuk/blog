@@ -1,0 +1,42 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
+#+BLOG: wordpress
+#+POSTID: 1393
+#+DATE: [2013-11-17]
+#+TITLE: Ariadne plugin for Emacs
+
+I am pleased to announce [[https://github.com/manzyuk/ariadne-el][ariadne-el]], an Emacs interface to [[https://github.com/feuerbach/ariadne][Ariadne]].
+
+[[https://github.com/feuerbach/ariadne][Ariadne]] is a new tool written by [[http://ro-che.info/][Roman Cheplyaka]] that provides the
+go-to-definition functionality for Haskell code.  It is designed as a
+server that responds to queries from IDEs and text editor plugins
+transmitted via the [[http://bert-rpc.org/][BERT-RPC protocol]] over TCP.  The server is
+implemented in Haskell using Roman's [[http://documentup.com/haskell-suite/haskell-names][haskell-names]] name resolution
+library.  It is fully Haskell-aware and can properly locate prefixed
+names (like ~T.head~) and locally bound names, which makes it quite a
+bit smarter than TAGS.  [[https://github.com/feuerbach/ariadne][Ariadne]] is in an early development stage, and
+as of v0.1.2 it can only find definitions in the current file, but I
+am sure this and other limitations will be lifted in future versions.
+
+[[https://github.com/manzyuk/ariadne-el][ariadne-el]] allows you to communicate with [[https://github.com/feuerbach/ariadne][Ariadne]] from Emacs.  It uses
+my own [[https://github.com/manzyuk/bert-el][bert-el]], BERT serialization library for Emacs, for
+encoding/decoding [[http://bert-rpc.org/][BERT-RPC protocol]] messages.  I have to admit that I
+never worked with networking facilities of Emacs before, so I
+shamelessly borrowed the design of low-level networking from [[http://common-lisp.net/project/slime/][SLIME]].
+
+If you are a Haskell programmer and an Emacs user, I encourage you to
+give [[https://github.com/feuerbach/ariadne][Ariadne]] and [[https://github.com/manzyuk/ariadne-el][ariadne-el]] a try.  The installation is pretty
+straightforward:
+
+1. Install [[https://github.com/feuerbach/ariadne][Ariadne]] and run the ~ariadne-server~ executable.
+2. Install [[https://github.com/manzyuk/bert-el][bert-el]] and [[https://github.com/manzyuk/ariadne-el][ariadne-el]], e.g. from [[http://marmalade-repo.org/][Marmalade]].
+3. Add the following lines to your ~.emacs~ file:
+
+#+BEGIN_SRC emacs-lisp
+  (require 'ariadne)
+  (add-hook 'haskell-mode-hook
+            (lambda ()
+              (define-key haskell-mode-map "\C-cd" 'ariadne-goto-definition)))
+#+END_SRC
+
+Now try to open any Haskell source file, put the cursor on any name,
+and press ~C-c d~.
