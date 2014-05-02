@@ -1,0 +1,195 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
+#+BLOG: wordpress
+#+DATE: [2014-05-02 Fri 17:34]
+#+TITLE: CPSing anamorphisms
+#+POSTID: 1408
+
+At the last meeting of the London Haskell User Group, my boss Peter
+Marks gave a [[http://files.meetup.com/3866232/foldListProduct.pdf][talk]] in which he presented definitions of catamorphisms
+and anamorphisms such that the composition of an anamorphism followed
+by a catamorphism (also known as a hylomorphism) doesn't build up an
+intermediate data structure.
+
+Even though the definitions are pretty neat, the idea is not new and
+boils down to CPSing the definition of anamorphism.  In this blog
+post, I'd like to illustrate on the example of lists how the CPSed
+definition can be derived from the standard one with the help of the
+Yoneda embedding (and thereby also illustrate the idea that [[https://golem.ph.utexas.edu/category/2008/01/the_continuation_passing_trans.html][CPS and
+the Yoneda embedding are the same thing]]).
+
+We begin by recalling the definitions of catamorphism and anamorphism
+in the case of lists.  We represent lists of elements of type ~a~ as
+the fixed point of the functor ~ListF a~:
+
+#+BEGIN_SRC haskell
+data ListF a b = Nil | Cons a b
+
+instance Functor (ListF a) where
+  fmap _ Nil        = Nil
+  fmap f (Cons a b) = Cons a (f b)
+
+newtype Fix f = Fix { unFix :: f (Fix f) }
+
+type List a = Fix (ListF a)
+#+END_SRC
+
+Catamorphisms and anamorphisms are then defined as follows:
+
+#+BEGIN_SRC haskell
+cata :: (ListF a b -> b) -> List a -> b
+cata alg = alg . fmap (cata alg) . unFix
+
+ana :: (b -> ListF a b) -> b -> List a
+ana coalg = Fix . fmap (ana coalg) . coalg
+#+END_SRC
+
+In his talk, Peter used a different representation of lists, which he
+called a /list abstraction/:
+
+#+BEGIN_SRC haskell
+data ListAbs e v a = ListAbs (e -> v -> a) a
+
+instance Functor (ListAbs e v) where
+  fmap f (ListAbs c n) = ListAbs (\e v -> f (c e v)) (f n)
+
+nil :: ListAbs e v a -> a
+nil (ListAbs _ n) = n
+
+cons :: e -> v -> ListAbs e v a -> a
+cons e v (ListAbs c _) = c e v
+#+END_SRC
+
+and defined catamorphisms and anamorphisms as follows:
+
+#+BEGIN_SRC haskell
+type ListAlg e a = ListAbs e a a
+
+cataList :: ListAlg e a -> [e] -> a
+cataList alg = go
+  where
+    go (x : xs) = cons x (go xs) alg
+    go []       = nil            alg
+
+type ListCoalg v e = forall a. v -> ListAbs e v a -> a
+
+anaList :: ListCoalg v e -> v -> [e]
+anaList f v = f v x
+  where
+    x = ListAbs (\e v -> e : f v x) []
+#+END_SRC
+
+The type ~ListF a b -> c~ is clearly isomorphic to the type ~ListAbs a
+b c~:
+
+#+BEGIN_SRC haskell
+p :: (ListF a b -> c) -> ListAbs a b c
+p alg = ListAbs (\e v -> alg (Cons e v)) (alg Nil)
+
+q :: ListAbs a b c -> (ListF a b -> c)
+q abs (Cons e v) = cons e v abs
+q abs Nil        = nil      abs
+#+END_SRC
+
+Therefore, the type ~ListF a b -> b~ is isomorphic to ~ListAbs a b b~,
+which by definition is equal to ~ListAlg a b~.  This isomorphism
+allows us to translate the function ~cata~ into a function
+
+#+BEGIN_SRC haskell
+cata' :: ListAlg a b -> List a -> b
+cata' = cata . q
+#+END_SRC
+
+Substituting the definitions of ~cata~ and ~q~ and simplifying, we
+obtain:
+
+#+BEGIN_SRC haskell
+  cata' alg = go
+    where
+      go (Cons x xs) = cons x (go xs) alg
+      go Nil         = nil            alg
+#+END_SRC
+
+In other words, we arrive at the definition of ~cataList~, up to the
+isomorphism between ~List a~ and ~a~.
+
+To relate ~ana~ and ~anaList~ in a similar way, we shall use the
+Yoneda Lemma, which claims that the type ~forall b. (a -> b) -> f b~
+of natural transformations from a representable functor ~(->) a~ to an
+arbitrary functor ~f~ is isomorphic to ~f a~.  The isomorphism is
+given by a pair of mutually inverse functions:
+
+#+BEGIN_SRC haskell
+y :: (forall b. (a -> b) -> f b) -> f a
+y f = f id
+
+z :: Functor f => f a -> (forall b. (a -> b) -> f b)
+z = flip fmap
+#+END_SRC
+
+In particular, the type ~forall c. (b -> c) -> (a -> c)~ of natural
+transformations from a representable functor ~(->) b~ to a
+representable functor ~(->) a~ is isomorphic to the type ~a -> b~ of
+functions from ~a~ to ~b~.
+
+By the Yoneda Lemma, the type ~b -> ListF a b~ is isomorphic to the
+type ~forall c. (ListF a b -> c) -> b -> c~.  The type ~ListF a b ->
+c~ is isomorphic to ~ListAbs a b c~.  Therefore, ~b -> ListF a b~ is
+isomorphic to ~forall c. ListAbs a b c -> b -> c~, which up to the
+order of arguments is ~ListCoalg a b~.  This isomorphism allows us to
+translate the function ~ana~ into a function
+
+#+BEGIN_SRC haskell
+ana' :: (forall c. ListAbs a b c -> b -> c) -> a -> List b
+ana' = ana . y . (. p)
+#+END_SRC
+
+Expanding the definitions, we obtain:
+
+#+BEGIN_SRC haskell
+ana' f = ana ((f . p) id)
+       = ana (f (p id))
+       = ana (f (ListAbs Cons Nil))
+#+END_SRC
+
+This doesn't resemble ~anaList~ yet.  Here is a trick.  Let us denote
+the function ~f (ListAbs Cons Nil) :: b -> ListF a b~ by ~g~:
+
+#+BEGIN_SRC haskell
+ana' f = ana g
+  where
+    g = f (ListAbs Cons Nil)
+#+END_SRC
+
+and do a bit of equational reasoning:
+
+#+BEGIN_SRC haskell
+ana g
+
+  -- definition of ana
+  = Fix . fmap (ana g) . g
+
+  -- definition of g
+  = Fix . fmap (ana g) . f (ListAbs Cons Nil)
+
+  -- definition of fmap for (->) b
+  = fmap (Fix . fmap (ana g)) . f $ ListAbs Cons Nil
+
+  -- naturality of f
+  = f . fmap (Fix . fmap (ana g)) $ ListAbs Cons Nil
+
+  -- definition of fmap for ListAbs and ListF
+  = f $ ListAbs (\e v -> Fix (Cons e (ana g v))) (Fix Nil)
+#+END_SRC
+
+The penultimate equality is by the naturality of ~f~, which is a
+consequence of the free theorem associated with the polymorphic type
+~forall c. ListAbs a b c -> b -> c~.  We conclude that
+
+#+BEGIN_SRC haskell
+ana' f = h
+  where
+    h = f $ ListAbs (\e v -> Fix (Cons e (h v))) (Fix Nil)
+#+END_SRC
+
+and you can easily convince yourself that this definition is
+equivalent to that of ~anaList~.
