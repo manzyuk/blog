@@ -130,7 +130,7 @@ and whose rows are labeled by expression types, and the cell at the
 intersection of given column and row contains a definition of the
 corresponding operation for the corresponding expression type.
 
-[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:34.png]]
+[[./2014-06-19-23:29:34.png]]
 
 In the functional approach, the definitions in the table are grouped
 by columns.  A column corresponding to an operation represents a
@@ -143,7 +143,7 @@ as it corresponds to adding a new row crossing all columns, and every
 intersection is a new case that has to be added to the corresponding
 function definition.
 
-[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:42.png]]
+[[./2014-06-19-23:29:42.png]]
 
 In the object-oriented approach, the definitions are grouped by rows.
 A row corresponding to a given expression type represents a class
@@ -156,7 +156,7 @@ hard as it corresponds to adding a new column crossing all rows, and
 every intersection is a new method definition that has to be added to
 each of the existing classes.
 
-[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:49.png]]
+[[./2014-06-19-23:29:49.png]]
 
 Can we achieve extensibility in both dimensions without loss of
 static guarantees and without having to modify existing code?  That
