@@ -1,0 +1,575 @@
+# -*- eval: (org2blog/wp-mode 1) -*-
+#+BLOG: wordpress
+#+POSTID: 1518
+#+OPTIONS: toc:nil
+#+DATE: [2014-06-19 Thu 00:06]
+#+TITLE: From Object Algebras to Finally Tagless Interpreters
+
+Last Saturday I gave a talk at [[http://kievfprog.net/][kiev::fprog]] meetup.  I really enjoyed
+the event, and taking the opportunity I would like to thank [[http://darkproger.net/][Vladimir
+Kirillov]] for organizing it.
+
+The slides of the talk can be found [[http://kievfprog.net/talks/oleksandr-manzyuk.pdf][here]], but I thought I would also
+write it up in a blog post.
+
+* Overview
+
+I am going to describe two design patterns, "object algebras" and
+"finally tagless interpreters", developed by the object-oriented and
+functional communities to solve the expression problem.  I hope my
+presentation will serve as a hands-on, down-to-earth introduction to
+both patterns, but more importantly I am going to argue that they are
+really implementations of the same idea.
+
+The plan is as follows.  First, we are going to recall what the
+expression problem is about.  Then, I will introduce object algebras
+and we will see how they help to solve the expression problem.
+Finally, we will see that the Java code for object algebras admits a
+pretty natural translation to Haskell, which will lead us to the
+finally tagless encoding.
+
+* Expression Problem
+
+We begin by discussing the expression problem.  To this end, we will
+use a classic example known as "Hutton’s Razor".  It is a language of
+simple arithmetic expressions built up from integer literals using the
+addition operation ~+~. In Haskell, expressions in this language are
+described by the following algebraic data type ~Exp~:
+
+#+BEGIN_SRC haskell
+data Exp = Lit Int | Add Exp Exp
+#+END_SRC
+
+For example, the expression ~(1 + (2 + 3))~ is represented in Haskell
+as follows:
+
+#+BEGIN_SRC haskell
+e1 = Add (Lit 1)
+         (Add (Lit 2)
+              (Lit 3))
+#+END_SRC
+
+The function ~eval~ takes an expression as an argument and returns its
+integer value:
+
+#+BEGIN_SRC haskell
+eval :: Exp -> Int
+eval (Lit n)   = n
+eval (Add x y) = eval x + eval y
+#+END_SRC
+
+This is a minimal setup that we will try to extend in various ways.
+
+Suppose that we want to add a function ~view~ that converts an
+expression to a string, its textual representation.  This is fairly
+straightforward:
+
+#+BEGIN_SRC haskell
+view :: Exp -> String
+view (Lit n)   = show n
+view (Add x y) = "(" ++ view x ++ " + " ++ view y ++ ")"
+#+END_SRC
+
+If, however, we decide to extend our language with the multiplication
+operation ~*~, we have to introduce a new constructor ~Mul~ in the
+definition of the data type ~Exp~, which entails adding a new case to
+every function defined on ~Exp~.
+
+Java, as well as many other object-oriented languages, doesn’t have
+algebraic data types and the standard object-oriented approach to this
+problem is different.
+
+To wit, one defines an interface (or an abstract class) ~Exp~ of
+expressions, which is implemented (or subclassed) by concrete classes
+~Lit~ and ~Add~ representing different types of expressions:
+
+#+BEGIN_SRC java
+interface Exp {
+    int eval();
+}
+
+class Lit implements Exp {
+    int n;
+    int eval() { return n; }
+}
+
+class Add implements Exp {
+    Exp x, y;
+    int eval() { return x.eval() + y.eval(); }
+}
+#+END_SRC
+
+For the sake of brevity, from now on I will omit access modifiers and
+constructor definitions in Java code.
+
+The operation ~eval~ is defined as a method of the interface ~Exp~,
+and the concrete classes ~Lit~ and ~Add~ implement this method.
+
+In order to add the multiplication operation, it suffices to define a
+new class ~Mul~ that implements the interface ~Exp~:
+
+#+BEGIN_SRC java
+class Mul implements Exp {
+    Exp x, y;
+    int eval() { return x.eval() * y.eval(); }
+}
+#+END_SRC
+
+Note that we don't need to touch the classes ~Lit~ and ~Add~.
+
+However, it is rather awkward to add new operations as we need to add
+new methods to the interface ~Exp~, which is going to break all its
+concrete implementations.
+
+We see that the functional and object-oriented paradigms are in some
+sense dual to each other.  There is a standard way to visualize this
+duality.
+
+Consider a rectangular table whose columns are labeled by operations
+and whose rows are labeled by expression types, and the cell at the
+intersection of given column and row contains a definition of the
+corresponding operation for the corresponding expression type.
+
+[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:34.png]]
+
+In the functional approach, the definitions in the table are grouped
+by columns.  A column corresponding to an operation represents a
+function containing definitions of that operation for all types of
+expressions.  The table is naturally extensible in the dimension of
+operations: adding a new operation is easy and corresponds to adding a
+new function, i.e., a new column.  Extensibility in the dimension of
+expression types is problematic: adding a new expression type is hard
+as it corresponds to adding a new row crossing all columns, and every
+intersection is a new case that has to be added to the corresponding
+function definition.
+
+[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:42.png]]
+
+In the object-oriented approach, the definitions are grouped by rows.
+A row corresponding to a given expression type represents a class
+containing definitions of all operations for that type.  One of the
+promises of the object-oriented programming is painless extensibility
+in the direction of expression types.  Indeed, adding a new expression
+type is easy in the object-oriented approach and corresponds to adding
+a new class, i.e., a new row to the table.  Adding a new operation is
+hard as it corresponds to adding a new column crossing all rows, and
+every intersection is a new method definition that has to be added to
+each of the existing classes.
+
+[[/home/manzyuk/media/images/screenshots/2014-06-19-23:29:49.png]]
+
+Can we achieve extensibility in both dimensions without loss of
+static guarantees and without having to modify existing code?  That
+is the essence of the expression problem.
+
+* Object Algebras
+
+Object algebras is a relatively new object-oriented design pattern for
+solving the expression problem.  It has been introduced in the paper
+[[https://www.cs.utexas.edu/~wcook/Drafts/2012/ecoop2012.pdf]["Extensiblity for the Masses"]].  What makes it attractive is that it is
+a relatively lightweight pattern that doesn't require fancy language
+extensions.  In particular, it can be easily implemented in mainstream
+languages like Java and C#.  Let us see how.
+
+We begin again by considering the language containing only literals
+and addition.  It is going to be described by an interface
+
+#+BEGIN_SRC java
+interface ExpAlg<T> {
+    T lit(int n);
+    T add(T x, T y);
+}
+#+END_SRC
+
+If you are familiar with [[http://en.wikipedia.org/wiki/Design_Patterns][GoF design patterns]], you may recognize this
+as the Visitor interface.  However, in this approach this interface is
+going to play a completely different role.  Namely, in terms of GoF
+design patterns ~ExpAlg<T>~ is an interface of an /abstract factory/
+for creating expressions.
+
+For example, the expression ~(1 + (2 + 3))~ is represented as follows:
+
+#+BEGIN_SRC java
+<T> T e1(ExpAlg<T> f) {
+    return f.add(
+        f.lit(1),
+        f.add(
+            f.lit(2),
+            f.add(3)));
+}
+#+END_SRC
+
+That is, it is represented as a function taking as an argument an
+object ~f~ implementing the interface ~ExpAlg<T>~ (i.e., a /concrete
+factory/) and returning a value of type ~T~.  The body of the function
+simply calls the methods ~lit~ and ~add~ of the factory ~f~ in a
+suitable order with suitable arguments.
+
+This representation allows us to vary the concrete factory ~f~ thus
+interpreting the expression ~e1~ in different ways.
+
+Let us see how this works in the case of evaluation of expressions.
+
+First of all, we introduce an interface ~Eval~ of "objects that can
+be evaluated":
+
+#+BEGIN_SRC java
+interface Eval { int eval(); }
+#+END_SRC
+
+Next we define a concrete factory ~EvalExp~, which is going to
+manufacture expression that can be evaluated:
+
+#+BEGIN_SRC java
+class EvalExp implements ExpAlg<Eval> {
+    Eval lit(final int n) {
+        return new Eval() {
+            int eval() {
+                return n;
+            }
+        };
+    }
+    Eval add(final Eval x, final Eval y) {
+         return new Eval() {
+             int eval() {
+                 return x.eval() + y.eval();
+             }
+         };
+    }
+}
+#+END_SRC
+
+We can now pass an instance of the factory ~EvalExp~ into the
+expression ~e1~ and get back an object that has a method ~eval~.  We
+can call this method and convince ourselves that it returns the right
+value:
+
+#+BEGIN_SRC java
+int v1 = e1(new EvalExp()).eval();
+#+END_SRC
+
+We shall soon see another example of defining operations, but first
+let us think how we could add multiplication to our language.
+
+We could add a new method ~mul~ to the interface ~ExpAlg<T>~, but
+then the implementation of the concrete factory ~EvalExp~ would
+require changes, which is precisely what we would like to avoid.
+
+Instead, we introduce a /new/ interface ~MulAlg<T>~ that /extends/ the
+interface ~ExpAlg<T>~ and adds a new method ~mul~ to it:
+
+#+BEGIN_SRC java
+interface MulAlg<T> extends ExpAlg<T> {
+    T mul(T x, T y);
+}
+#+END_SRC
+
+Expressions containing multiplication are now going to be represented
+as functions taking as an argument objects implementing the extended
+interface ~MulAlg<T>~.  For example, the expression ~(4 * (5 + 6))~
+will be represented as follows:
+
+#+BEGIN_SRC java
+<T> T e2(MulAlg<T> f) {
+    return f.mul(
+        f.lit(4),
+        f.add(
+            f.lit(5),
+            f.lit(6)));
+}
+#+END_SRC
+
+To extend the implementation of evaluation of expressions to
+expressions containing multiplication we define a new concrete factory
+~EvalMul~ that implements the interface ~MulAlg<Eval>~ and inherits
+from the factory ~EvalExp~ implementations of the methods ~lit~ and
+~add~:
+
+#+BEGIN_SRC java
+class EvalMul extends EvalExp implements MulAlg<Eval> {
+    Eval mul(final Eval x, final Eval y) {
+        return new Eval() {
+            int eval() {
+                return x.eval() * y.eval();
+            }
+        };
+    }
+}
+#+END_SRC
+
+We can now pass an instance of the factory ~EvalMul~ into the
+expression ~e2~, get back an object that can be evaluated, and compute
+its value by calling the ~eval~ method:
+
+#+BEGIN_SRC java
+int v2 = e2(new EvalMul()).eval();
+#+END_SRC
+
+Note that we are not touching any existing code: we are defining new
+interfaces and classes and use inheritance to avoid duplication.
+
+Let us consider an example of adding a new operation and convince
+ourselves that it doesn't require touching existing code either.
+
+We introduce an interface ~View~ of "object that can be converted to
+a string":
+
+#+BEGIN_SRC java
+interface View { String view(); }
+#+END_SRC
+
+We then define concrete factories ~ViewExp~ and ~ViewMul~
+implementing the interfaces ~ExpAlg<View>~ and ~MulAlg<View>~:
+
+#+BEGIN_SRC java
+class ViewExp implements ExpAlg<View> {
+    View lit(final int n) {
+        return new View() {
+            String view() {
+                return Integer.toString(n);
+            }
+        };
+    }
+    View add(final View x, final View y) {
+        return new View() {
+            String view() {
+                return "(" + x.view() + " + " + y.view() + ")";
+            }
+        };
+    }
+}
+#+END_SRC
+
+#+BEGIN_SRC java
+class ViewMul extends ViewExp implements MulAlg<View> {
+    View mul(final View x, final View y) {
+        return new View() {
+            String view() {
+                return "(" + x.view() + " * " + y.view() + ")";
+            }
+        };
+    }
+}
+#+END_SRC
+
+Notice that we have a choice: to define conversion to a string only
+for expression containing literals and addition or also for
+expressions containing multiplication.  In the latter case, the class
+~ViewMul~ inherits from ~ViewExp~ the methods responsible for
+conversion of literals and addition and adds a definition of
+conversion of multiplication, thereby implementing the interface
+~MulAlg<View>~.
+
+We can now pass these factories into the expressions ~e1~ and ~e2~,
+get back objects supporting the method ~view~, and convince ourselves
+that this method returns the right values:
+
+#+BEGIN_SRC java
+String s1 = e1(new ViewExp()).view();
+String s2 = e2(new ViewMul()).view();
+#+END_SRC
+
+A few words about the terminology.  The abstract factory interface
+~ExpAlg<T>~ is called an /object algebra interface/ and concrete
+factories implementing it are called /object algebras/.  The
+terminology and the approach in general are inspired by abstract
+algebra, in which algebraic structures (or simply algebras) are
+described by signatures.  A signature acts as an interface that
+specifies the types of operations defined on the underlying set of an
+algebraic structure, and an algebra provides concrete definitions of
+those operations and is similar to a class implementing an interface.
+
+* Finally Tagless
+
+We now translate the above example from Java to Haskell and arrive at
+essentially the finally tagless approach.
+
+This approach has been introduced in the paper [[https://www.cs.rutgers.edu/~ccshan/tagless/jfp.pdf]["Finally Tagless,
+Partially Evaluated"]].  It enjoys many interesting properties, but we
+are only going to focus on how it helps us to solve the expression
+problem.
+
+First, we consider how expressions are represented in the finally
+tagless approach.
+
+The Haskell counterpart of the interface ~ExpAlg<T>~ in Java is a
+typeclass ~ExpAlg~:
+
+#+BEGIN_SRC haskell
+class ExpAlg t where
+    lit :: Int -> t
+    add :: t -> t -> t
+#+END_SRC
+
+The expression ~(1 + (2 + 3))~ is represented as follows:
+
+#+BEGIN_SRC haskell
+e1 = add (lit 1)
+         (add (lit 2)
+              (lit 3))
+#+END_SRC
+
+and its inferred type ~ExpAlg t => t~ can be read as a statement that
+the term ~e1~ can be given any type ~t~ as long as ~t~ is an instance
+of the typeclass ~ExpAlg~, i.e., supports the operations ~lit~ and
+~add~.
+
+What is remarkable is that at the stage of desugaring the typeclass
+~ExpAlg~ is translated into a record type with fields ~lit~ and ~add~,
+instance declarations of ~ExpAlg~ are translated into record values of
+this type, and the expression ~e1~ is translated into a function
+taking as an argument a record value corresponding to an instance
+declaration of ~ExpAlg~ for a given type ~t~.  This record value is a
+direct analog of the concrete factory ~f~ in Java.
+
+The difference between Haskell and Java is that in Haskell for every
+pair of a typeclass and a type there can be at most one instance
+declaration, and once this instance declaration is defined, it remains
+implicitly in the scope and is passed around automatically by the
+compiler.  In Java, there can be many implementations of a given
+generic interface instantiated with a given type, and these
+implementation are entities in the program that have names and have to
+be passed around explicitly.
+
+To understand how operations are defined in the finally tagless
+approach, let us look again at evaluation of expressions.  We are
+going to simplify the Java implementation first to make translation to
+Haskell more obvious.
+
+Namely, we observe that we don't have to make ~Eval~ an interface,
+although conceptually this is cleaner.  After all, if all we know
+about an object is that it implements the interface ~Eval~, then all
+we can do with this object is to call the method ~eval~.  Therefore,
+for an external observer such an object is practically
+indistinguishable from an object of a /class/ ~Eval~ with a public
+field ~eval~ of type ~int~.  With this change, the definition of the
+factory ~EvalExp~ becomes:
+
+#+BEGIN_SRC java
+class Eval { public int eval; }
+
+class EvalExp implements ExpAlg<Eval> {
+    Eval lit(int n) {
+        return Eval(n);
+    }
+    Eval add(Eval x, Eval y) {
+        return Eval(x.eval + y.eval);
+    }
+}
+#+END_SRC
+
+To evaluate the expression ~e1~ we pass it an instance of the class
+~EvalExp~, which produces an object of the class ~Eval~, which we can
+ask the value of its field ~eval~:
+
+#+BEGIN_SRC java
+int v1 = e1(new EvalExp()).eval;
+#+END_SRC
+
+The class ~Eval~ is a wrapper around the type ~int~.  In Haskell, we
+introduce a wrapper ~Eval~ around the type ~Int~ implemented, say, as
+a ~newtype~:
+
+#+BEGIN_SRC haskell
+newtype Eval = Eval { eval :: Int }
+#+END_SRC
+
+The definition of the class ~EvalExp~ translates into an instance
+declaration of the typeclass ~ExpAlg~ for the type ~Eval~:
+
+#+BEGIN_SRC haskell
+instance ExpAlg Eval where
+    lit n   = Eval n
+    add x y = Eval $ eval x + eval y
+#+END_SRC
+
+To evaluate the expression ~e1~ we restrict its type ~ExpAlg t => t~
+to ~Eval~, which is similar to applying the expression ~e1~ to the
+concrete factory ~EvalExp~ in Java, and then the obtained value of
+type ~Eval~ can be queried the value of the field ~eval~:
+
+#+BEGIN_SRC haskell
+v1 = eval (e1 :: Eval)
+#+END_SRC
+
+In fact, we don't have to explicitly restrict the type of ~e1~ to
+~Eval~ as the compiler will infer this automatically from the fact
+that ~e1~ is passed as an argument to the function ~eval :: Eval ->
+Int~.
+
+In Java, extension of the language with the multiplication operation
+corresponded to extension of the interface ~ExpAlg<T>~ to ~MulAlg<T>~
+with the method ~mul~.  In Haskell, this translates into a definition
+of a new typeclass ~MulAlg~ that is a subclass of ~ExpAlg~:
+
+#+BEGIN_SRC haskell
+class ExpAlg t => MulAlg t where
+    mul :: t -> t -> t
+#+END_SRC
+
+Expressions containing multiplication will now have the type ~MulAlg t
+=> t~, for example:
+
+#+BEGIN_SRC haskell
+e2 = mul (lit 4)
+         (add (lit 5)
+              (lit 6))
+#+END_SRC
+
+To extend the definition of the operation ~eval~, we perform the same
+transformation as above: we replace the interface ~Eval~ with a class
+~Eval~ with a public field of type ~int~.  Then the definition of the
+class ~EvalMul~ implementing the interface ~MulAlg<Eval>~ translates
+in Haskell into a definition of an instance declaration of the
+typeclass ~MulAlg~ for the type ~Eval~:
+
+#+BEGIN_SRC haskell
+instance MulAlg Eval where
+    mul x y = Eval $ eval x * eval y
+#+END_SRC
+
+Finally, we consider an example of adding new operations in the
+finally tagless approach.  Let us implement conversion to string.
+
+We transform the object algebras implementation of conversion in Java
+similarly to what we did to the implementation of evaluation: we
+replace the interface ~View~ with a class ~View~ with a public field
+~view~ of the type ~String~.  Then in Haskell this all is going to
+turn into an instance declaration of the typeclass ~ExpAlg~ for a type
+~View~ that is a ~newtype~ wrapper around ~String~:
+
+#+BEGIN_SRC haskell
+  newtype View = View { view :: String }
+
+  instance ExpAlg View where
+      lit n   = View $ show n
+      add x y = View $ "(" ++ view x ++ " + " ++ view y ++ ")"
+#+END_SRC
+
+Extension of the operation ~view~ to expressions containing
+multiplication is done similarly and amounts to defining an instance
+declaration of the typeclass ~MulAlg~ for the type ~View~:
+
+#+BEGIN_SRC haskell
+instance MulAlg View where
+    mul x y = View $ "(" ++ view x ++ " * " ++ view y ++ ")"
+#+END_SRC
+
+The encoding we have arrived at is almost identical to that proposed
+in [[https://www.cs.rutgers.edu/~ccshan/tagless/jfp.pdf]["Finally Tagless, Partially Evaluated"]].  The difference is that in
+Haskell there is no need to make ~MulAlg~ a subclass of ~ExpAlg~: we
+can define it as a separate typeclass:
+
+#+BEGIN_SRC haskell
+class MulAlg t where
+    mul :: t -> t -> t
+#+END_SRC
+
+and then expressions containing multiplication will be represented by
+values of the type ~(ExpAlg t, MulAlg t) => t~.  This gives us more
+flexibility because we can represent different language extensions as
+separate typeclasses that can be arbitrarily combined.
+
+#+/home/manzyuk/media/images/screenshots/2014-06-19-23:29:34.png http://oleksandrmanzyuk.files.wordpress.com/2014/06/wpid-2014-06-19-2329341.png
+#+/home/manzyuk/media/images/screenshots/2014-06-19-23:29:42.png http://oleksandrmanzyuk.files.wordpress.com/2014/06/wpid-2014-06-19-232942.png
+#+/home/manzyuk/media/images/screenshots/2014-06-19-23:29:49.png http://oleksandrmanzyuk.files.wordpress.com/2014/06/wpid-2014-06-19-232949.png
